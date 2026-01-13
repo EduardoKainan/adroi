@@ -13,6 +13,15 @@ interface NewTaskModalProps {
   projects: Project[];
 }
 
+// Helper para data local YYYY-MM-DD
+const getTodayLocal = () => {
+    const date = new Date();
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+};
+
 export const NewTaskModal: React.FC<NewTaskModalProps> = ({ isOpen, onClose, onSuccess, initialCategory, taskToEdit, clients, projects }) => {
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
@@ -20,7 +29,7 @@ export const NewTaskModal: React.FC<NewTaskModalProps> = ({ isOpen, onClose, onS
     priority: 'medium',
     category: initialCategory || 'do_now',
     durationMinutes: 30,
-    dueDate: new Date().toISOString().split('T')[0],
+    dueDate: getTodayLocal(),
     clientId: '',
     projectId: ''
   });
@@ -35,7 +44,7 @@ export const NewTaskModal: React.FC<NewTaskModalProps> = ({ isOpen, onClose, onS
           priority: taskToEdit.priority,
           category: taskToEdit.category,
           durationMinutes: taskToEdit.durationMinutes || 30,
-          dueDate: taskToEdit.dueDate ? taskToEdit.dueDate.split('T')[0] : new Date().toISOString().split('T')[0],
+          dueDate: taskToEdit.dueDate ? taskToEdit.dueDate.split('T')[0] : getTodayLocal(),
           clientId: taskToEdit.clientId || '',
           projectId: taskToEdit.projectId || ''
         });
@@ -46,7 +55,7 @@ export const NewTaskModal: React.FC<NewTaskModalProps> = ({ isOpen, onClose, onS
           priority: 'medium',
           category: initialCategory || 'do_now',
           durationMinutes: 30,
-          dueDate: new Date().toISOString().split('T')[0],
+          dueDate: getTodayLocal(),
           clientId: '',
           projectId: ''
         });

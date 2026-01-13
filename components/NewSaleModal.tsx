@@ -9,10 +9,19 @@ interface NewSaleModalProps {
   clientId: string;
 }
 
+// Helper para data local YYYY-MM-DD
+const getTodayLocal = () => {
+    const date = new Date();
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+};
+
 export const NewSaleModal: React.FC<NewSaleModalProps> = ({ isOpen, onClose, onSuccess, clientId }) => {
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
-    date: new Date().toISOString().split('T')[0],
+    date: getTodayLocal(), // Uso do helper para garantir data local
     description: '',
     quantity: 1,
     unit_value: ''
@@ -33,8 +42,8 @@ export const NewSaleModal: React.FC<NewSaleModalProps> = ({ isOpen, onClose, onS
       });
       onSuccess();
       onClose();
-      // Reset sensitive fields
-      setFormData(prev => ({ ...prev, description: '', quantity: 1, unit_value: '' }));
+      // Reset sensitive fields, keeping date current
+      setFormData(prev => ({ ...prev, date: getTodayLocal(), description: '', quantity: 1, unit_value: '' }));
     } catch (error: any) {
       console.error('Erro ao registrar venda:', error);
       

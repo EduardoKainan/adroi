@@ -1,14 +1,23 @@
 import { supabase } from '../lib/supabase';
 import { Client, Campaign, DailyMetric } from '../types';
 
+// Helper para formatar data localmente (YYYY-MM-DD)
+// Evita o problema do toISOString() que usa UTC e pode pegar o dia errado (amanhã) se for tarde da noite
+const getLocalDateString = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 export const clientService = {
   // Fetch all clients with aggregated real-time metrics filtered by date
   async getClients(days = 30) {
     try {
-      // Calcular data de início
+      // Calcular data de início usando horário local
       const startDate = new Date();
       startDate.setDate(startDate.getDate() - days);
-      const startDateStr = startDate.toISOString().split('T')[0];
+      const startDateStr = getLocalDateString(startDate);
 
       // 1. Busca os clientes
       const { data: clients, error: clientError } = await supabase
@@ -32,14 +41,14 @@ export const clientService = {
 
       const campaignIds = campaigns?.map(c => c.id) || [];
 
-      // 3. Busca métricas acumuladas (leads, spend, revenue) FILTRADAS POR DATA
+      // 3. Busca métricas acumuladas (leads, spend, revenue) FILTRADAS POR DATA LOCAL
       let metricsData: any[] = [];
       if (campaignIds.length > 0) {
         const { data: metrics, error: metricsError } = await supabase
           .from('campaign_metrics')
           .select('campaign_id, leads, spend, revenue')
           .in('campaign_id', campaignIds)
-          .gte('date', startDateStr); // Filtro de Data
+          .gte('date', startDateStr); // Filtro de Data corrigido
         
         if (!metricsError && metrics) {
           metricsData = metrics;
@@ -120,7 +129,7 @@ export const clientService = {
   async getCampaigns(clientId: string, days = 30) {
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
-    const startDateStr = startDate.toISOString().split('T')[0];
+    const startDateStr = getLocalDateString(startDate);
 
     // 1. Buscar metadados das campanhas
     const { data: campaigns, error } = await supabase
@@ -134,12 +143,11 @@ export const clientService = {
     const campaignIds = campaigns.map(c => c.id);
 
     // 2. Buscar métricas acumuladas de todas essas campanhas no período
-    // Usamos select('*') para evitar erro caso a coluna 'purchases' ainda não exista no banco
     const { data: metrics, error: metricsError } = await supabase
       .from('campaign_metrics')
       .select('*')
       .in('campaign_id', campaignIds)
-      .gte('date', startDateStr); // Filtro de Data
+      .gte('date', startDateStr); // Filtro de Data corrigido
 
     if (metricsError) throw metricsError;
 
@@ -155,7 +163,6 @@ export const clientService = {
       metricsMap[m.campaign_id].leads += Number(m.leads || 0);
       metricsMap[m.campaign_id].impressions += Number(m.impressions || 0);
       metricsMap[m.campaign_id].clicks += Number(m.clicks || 0);
-      // Mapeia purchases diretamente
       metricsMap[m.campaign_id].purchases += Number(m.purchases || 0); 
     });
 
@@ -191,12 +198,13 @@ export const clientService = {
     const campaignIds = campaigns.map(c => c.id);
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
+    const startDateStr = getLocalDateString(startDate);
 
     const { data: metrics, error } = await supabase
       .from('campaign_metrics')
       .select('*')
       .in('campaign_id', campaignIds)
-      .gte('date', startDate.toISOString().split('T')[0])
+      .gte('date', startDateStr)
       .order('date', { ascending: true });
 
     if (error) throw error;
@@ -222,12 +230,13 @@ export const clientService = {
   async getSingleCampaignMetrics(campaignId: string, days = 30) {
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
+    const startDateStr = getLocalDateString(startDate);
 
     const { data: metrics, error } = await supabase
       .from('campaign_metrics')
       .select('*')
       .eq('campaign_id', campaignId)
-      .gte('date', startDate.toISOString().split('T')[0])
+      .gte('date', startDateStr)
       .order('date', { ascending: true });
 
     if (error) throw error;

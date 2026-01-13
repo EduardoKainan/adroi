@@ -3,8 +3,8 @@ import { Client, Contract, Campaign, DailyMetric, Deal } from '../types';
 import { clientService } from '../services/clientService';
 import { contractService } from '../services/contractService';
 import { dealService } from '../services/dealService';
-import { ArrowUpRight, ArrowDownRight, DollarSign, Target, TrendingUp, AlertTriangle, Calendar, Download, Loader2, Users, ShoppingBag, Plus, Copy, Check, BarChart3, XCircle } from 'lucide-react';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend } from 'recharts';
+import { ArrowUpRight, ArrowDownRight, DollarSign, Target, TrendingUp, AlertTriangle, Calendar, Download, Loader2, Users, ShoppingBag, Plus, Copy, Check, BarChart, PieChart, Filter } from 'lucide-react';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, ComposedChart, Bar, Line, FunnelChart, Funnel, LabelList, Cell } from 'recharts';
 import { NewSaleModal } from './NewSaleModal';
 
 interface ClientViewProps {
@@ -21,12 +21,8 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, onBack }) => {
   const [isSaleModalOpen, setIsSaleModalOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [selectedPeriod, setSelectedPeriod] = useState<number>(30); // Default 30 days
+  const [activeChart, setActiveChart] = useState<'finance' | 'acquisition' | 'funnel'>('finance');
   
-  // Specific Campaign Analysis State
-  const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null);
-  const [selectedCampaignMetrics, setSelectedCampaignMetrics] = useState<DailyMetric[]>([]);
-  const [loadingCampaignMetrics, setLoadingCampaignMetrics] = useState(false);
-
   // Use local state for client to allow instant updates
   const [currentClient, setCurrentClient] = useState<Client>(client);
 
@@ -58,30 +54,10 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, onBack }) => {
       setContract(contractData);
       setDeals(dealsData);
       
-      // If a campaign was previously selected, refresh its data too
-      if (selectedCampaign) {
-        handleViewCampaign(selectedCampaign);
-      }
-      
     } catch (error: any) {
       console.error("Failed to load client details:", error?.message || error);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleViewCampaign = async (campaign: Campaign) => {
-    // If clicking the same campaign, toggle off? No, let's keep it and allow X close.
-    // If we click a different one, we switch.
-    setLoadingCampaignMetrics(true);
-    setSelectedCampaign(campaign);
-    try {
-      const metrics = await clientService.getSingleCampaignMetrics(campaign.id, selectedPeriod);
-      setSelectedCampaignMetrics(metrics);
-    } catch (err) {
-      console.error("Erro ao carregar métricas da campanha", err);
-    } finally {
-      setLoadingCampaignMetrics(false);
     }
   };
 
@@ -95,10 +71,35 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, onBack }) => {
     fetchData();
   }, [client.id, selectedPeriod]);
 
-  // If period changes, clear selected campaign to avoid confusion or refetch (handled in fetchData)
-  useEffect(() => {
-    setSelectedCampaign(null);
-  }, [selectedPeriod]);
+  // Preparar dados para o gráfico de Aquisição (Calculando CPL dia a dia)
+  const acquisitionChartData = chartData.map(item => ({
+    ...item,
+    cpl: item.leads > 0 ? item.spend / item.leads : 0
+  }));
+
+  // Preparar dados para o Funil com referências aos Gradient IDs
+  const funnelData = [
+    { 
+      name: 'Impressões', 
+      value: campaigns.reduce((acc, c) => acc + (c.impressions || 0), 0), 
+      fill: 'url(#gradImpressions)' 
+    },
+    { 
+      name: 'Cliques', 
+      value: campaigns.reduce((acc, c) => acc + (c.clicks || 0), 0), 
+      fill: 'url(#gradClicks)' 
+    },
+    { 
+      name: 'Leads', 
+      value: campaigns.reduce((acc, c) => acc + (c.leads || 0), 0), 
+      fill: 'url(#gradLeads)' 
+    },
+    { 
+      name: 'Vendas', 
+      value: campaigns.reduce((acc, c) => acc + (c.purchases || 0), 0), 
+      fill: 'url(#gradSales)' 
+    }
+  ];
 
   const handleCopyReport = () => {
     // Define datas
@@ -142,6 +143,39 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, onBack }) => {
     { label: 'ROAS Global', value: `${(filteredStats.roas || 0).toFixed(2)}x`, sub: 'Meta: 4.0x', trend: (filteredStats.roas || 0) > 4 ? 'up' : 'down', icon: TrendingUp, color: 'text-purple-500' },
     { label: 'ROI Real', value: `${((filteredStats.roi || 0) * 100).toFixed(1)}%`, sub: 'Desc. custos', trend: 'up', icon: BarChart, color: 'text-emerald-500' },
   ];
+
+  // Custom Tooltip for Funnel
+  const CustomFunnelTooltip = ({ active, payload }: any) => {
+    if (active && payload && payload.length) {
+      const data = payload[0].payload;
+      const index = funnelData.findIndex(item => item.name === data.name);
+      const prevItem = index > 0 ? funnelData[index - 1] : null;
+      
+      let conversionRate = 0;
+      let conversionLabel = '';
+
+      if (prevItem && prevItem.value > 0) {
+        conversionRate = (data.value / prevItem.value) * 100;
+        if (data.name === 'Cliques') conversionLabel = 'CTR';
+        if (data.name === 'Leads') conversionLabel = 'Conv. LP';
+        if (data.name === 'Vendas') conversionLabel = 'Taxa de Fechamento';
+      }
+
+      return (
+        <div className="bg-white p-3 border border-slate-200 shadow-lg rounded-lg">
+          <p className="font-bold text-slate-800">{data.name}</p>
+          <p className="text-indigo-600 font-semibold">{data.value.toLocaleString()}</p>
+          {prevItem && (
+             <div className="mt-2 pt-2 border-t border-slate-100 text-xs">
+                <span className="text-slate-500">{conversionLabel}: </span>
+                <span className="font-bold text-slate-700">{conversionRate.toFixed(2)}%</span>
+             </div>
+          )}
+        </div>
+      );
+    }
+    return null;
+  };
 
   if (loading && campaigns.length === 0) {
     return (
@@ -244,99 +278,148 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, onBack }) => {
         ))}
       </div>
 
-      {/* Conditional Specific Campaign Chart */}
-      {selectedCampaign && (
-        <div className="bg-white p-6 rounded-xl border border-indigo-200 shadow-lg relative animate-in slide-in-from-top-4 duration-300">
-           <button 
-             onClick={() => setSelectedCampaign(null)}
-             className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"
-           >
-             <XCircle size={24} />
-           </button>
-           
-           <div className="flex flex-col mb-6">
-              <span className="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-1">Análise Detalhada</span>
-              <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-                {selectedCampaign.name}
-              </h3>
-              <div className="flex gap-4 mt-2 text-sm text-slate-500">
-                 <span>ROAS Médio: <b>{selectedCampaign.roas.toFixed(2)}x</b></span>
-                 <span>Investimento Total: <b>R$ {selectedCampaign.spend.toLocaleString('pt-BR')}</b></span>
-              </div>
-           </div>
-
-           {loadingCampaignMetrics ? (
-             <div className="h-64 flex items-center justify-center text-slate-400">
-               <Loader2 className="animate-spin mb-2" size={32} />
-             </div>
-           ) : selectedCampaignMetrics.length > 0 ? (
-            <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={selectedCampaignMetrics} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="colorCampRev" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.1}/>
-                      <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/>
-                    </linearGradient>
-                    <linearGradient id="colorCampSpend" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.1}/>
-                      <stop offset="95%" stopColor="#f43f5e" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <XAxis dataKey="date" tickFormatter={(v) => v.split('-')[2]} stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} />
-                  <YAxis stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(v) => `R$${v}`} />
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                  <Tooltip 
-                    contentStyle={{ backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #e2e8f0' }}
-                    formatter={(value: number) => [`R$ ${value}`, '']}
-                  />
-                  <Legend iconType="circle" />
-                  <Area type="monotone" dataKey="revenue" name="Receita" stroke="#8b5cf6" strokeWidth={2} fillOpacity={1} fill="url(#colorCampRev)" />
-                  <Area type="monotone" dataKey="spend" name="Investimento" stroke="#f43f5e" strokeWidth={2} fillOpacity={1} fill="url(#colorCampSpend)" />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-           ) : (
-             <div className="h-64 flex items-center justify-center text-slate-400 bg-slate-50 rounded-lg border border-dashed border-slate-300">
-               <p>Sem dados históricos para esta campanha no período selecionado.</p>
-             </div>
-           )}
-        </div>
-      )}
-
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Main Charts (Aggregated) - Only show if no specific campaign selected to save space, OR keep it? Let's keep it but maybe dim it if focussed on campaign. For now, keep as is. */}
-        <div className={`lg:col-span-2 bg-white p-6 rounded-xl border border-slate-200 shadow-sm transition-opacity ${selectedCampaign ? 'opacity-50 pointer-events-none grayscale-[0.5]' : ''}`}>
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="text-lg font-bold text-slate-800">Receita vs Investimento (Global)</h3>
-            <span className="text-xs font-medium text-slate-400">Últimos {selectedPeriod} dias</span>
+        {/* Main Charts (Tabs) */}
+        <div className="lg:col-span-2 bg-white p-6 rounded-xl border border-slate-200 shadow-sm transition-opacity">
+          <div className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
+            <h3 className="text-lg font-bold text-slate-800">Evolução & Performance</h3>
+            
+            {/* Chart Tabs */}
+            <div className="bg-slate-100 p-1 rounded-lg flex gap-1 overflow-x-auto max-w-full">
+              <button 
+                onClick={() => setActiveChart('finance')}
+                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all whitespace-nowrap ${
+                  activeChart === 'finance' 
+                    ? 'bg-white text-indigo-600 shadow-sm' 
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                Financeiro
+              </button>
+              <button 
+                onClick={() => setActiveChart('acquisition')}
+                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all whitespace-nowrap ${
+                  activeChart === 'acquisition' 
+                    ? 'bg-white text-orange-600 shadow-sm' 
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                Leads x CPL
+              </button>
+              <button 
+                onClick={() => setActiveChart('funnel')}
+                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all whitespace-nowrap ${
+                  activeChart === 'funnel' 
+                    ? 'bg-white text-emerald-600 shadow-sm' 
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                Funil de Conversão
+              </button>
+            </div>
           </div>
           
           {chartData.length > 0 ? (
-            <div className="h-80">
+            <div className="h-80 w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.1}/>
-                      <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
-                    </linearGradient>
-                    <linearGradient id="colorSpend" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.1}/>
-                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <XAxis dataKey="date" tickFormatter={(v) => v.split('-')[2]} stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} />
-                  <YAxis stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(v) => `R$${v/1000}k`} />
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                  <Tooltip 
-                    contentStyle={{ backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                    formatter={(value: number) => [`R$ ${value}`, '']}
-                  />
-                  <Legend iconType="circle" />
-                  <Area type="monotone" dataKey="revenue" name="Receita" stroke="#10b981" strokeWidth={2} fillOpacity={1} fill="url(#colorRev)" />
-                  <Area type="monotone" dataKey="spend" name="Investimento" stroke="#3b82f6" strokeWidth={2} fillOpacity={1} fill="url(#colorSpend)" />
-                </AreaChart>
+                {activeChart === 'finance' ? (
+                  /* Gráfico Financeiro (Original) */
+                  <AreaChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.1}/>
+                        <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                      </linearGradient>
+                      <linearGradient id="colorSpend" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.1}/>
+                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <XAxis dataKey="date" tickFormatter={(v) => v.split('-')[2]} stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} />
+                    <YAxis stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(v) => `R$${v/1000}k`} />
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                    <Tooltip 
+                      contentStyle={{ backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                      formatter={(value: number) => [`R$ ${value.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`, '']}
+                    />
+                    <Legend iconType="circle" />
+                    <Area type="monotone" dataKey="revenue" name="Receita" stroke="#10b981" strokeWidth={2} fillOpacity={1} fill="url(#colorRev)" />
+                    <Area type="monotone" dataKey="spend" name="Investimento" stroke="#3b82f6" strokeWidth={2} fillOpacity={1} fill="url(#colorSpend)" />
+                  </AreaChart>
+                ) : activeChart === 'acquisition' ? (
+                  /* Gráfico Aquisição (Leads x CPL) - Composed Chart para duplo eixo */
+                  <ComposedChart data={acquisitionChartData} margin={{ top: 10, right: 30, left: 10, bottom: 0 }}>
+                    <XAxis dataKey="date" tickFormatter={(v) => v.split('-')[2]} stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} />
+                    
+                    {/* Eixo Esquerdo (Leads - Volume) */}
+                    <YAxis yAxisId="left" stroke="#f97316" fontSize={12} tickLine={false} axisLine={false} label={{ value: 'Leads', angle: -90, position: 'insideLeft', fill: '#f97316', fontSize: 10 }} />
+                    
+                    {/* Eixo Direito (CPL - Moeda) */}
+                    <YAxis yAxisId="right" orientation="right" stroke="#ef4444" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(v) => `R$${v}`} label={{ value: 'CPL', angle: 90, position: 'insideRight', fill: '#ef4444', fontSize: 10 }} />
+                    
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                    <Tooltip 
+                      contentStyle={{ backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                      formatter={(value: number, name: string) => {
+                        if (name === 'Custo por Lead') return [`R$ ${value.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`, name];
+                        return [value, name];
+                      }}
+                    />
+                    <Legend iconType="circle" />
+                    
+                    <Bar yAxisId="left" dataKey="leads" name="Leads" fill="#f97316" radius={[4, 4, 0, 0]} barSize={20} />
+                    <Line yAxisId="right" type="monotone" dataKey="cpl" name="Custo por Lead" stroke="#ef4444" strokeWidth={2} dot={{ r: 2 }} />
+                  </ComposedChart>
+                ) : (
+                  /* Gráfico Funil de Conversão Moderno 3D */
+                  <FunnelChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
+                    <defs>
+                      {/* Sombra para dar profundidade/efeito flutuante */}
+                      <filter id="shadow" height="200%">
+                        <feDropShadow dx="2" dy="2" stdDeviation="2" floodColor="#000000" floodOpacity="0.2"/>
+                      </filter>
+                      
+                      {/* Gradiente Impressões (Indigo) - Efeito Cilíndrico (Escuro-Claro-Escuro) */}
+                      <linearGradient id="gradImpressions" x1="0" y1="0" x2="1" y2="0">
+                        <stop offset="0%" stopColor="#4338ca" />
+                        <stop offset="50%" stopColor="#818cf8" />
+                        <stop offset="100%" stopColor="#4338ca" />
+                      </linearGradient>
+
+                      {/* Gradiente Cliques (Blue) */}
+                      <linearGradient id="gradClicks" x1="0" y1="0" x2="1" y2="0">
+                        <stop offset="0%" stopColor="#1e40af" />
+                        <stop offset="50%" stopColor="#60a5fa" />
+                        <stop offset="100%" stopColor="#1e40af" />
+                      </linearGradient>
+
+                      {/* Gradiente Leads (Amber) */}
+                      <linearGradient id="gradLeads" x1="0" y1="0" x2="1" y2="0">
+                        <stop offset="0%" stopColor="#b45309" />
+                        <stop offset="50%" stopColor="#fbbf24" />
+                        <stop offset="100%" stopColor="#b45309" />
+                      </linearGradient>
+
+                      {/* Gradiente Vendas (Emerald) */}
+                      <linearGradient id="gradSales" x1="0" y1="0" x2="1" y2="0">
+                        <stop offset="0%" stopColor="#047857" />
+                        <stop offset="50%" stopColor="#34d399" />
+                        <stop offset="100%" stopColor="#047857" />
+                      </linearGradient>
+                    </defs>
+                    
+                    <Tooltip content={<CustomFunnelTooltip />} cursor={{ fill: 'transparent' }} />
+                    <Funnel
+                      dataKey="value"
+                      data={funnelData}
+                      isAnimationActive
+                      labelLine={false}
+                      filter="url(#shadow)"
+                    >
+                      <LabelList position="right" fill="#475569" stroke="none" dataKey="name" fontSize={13} fontWeight={600} />
+                    </Funnel>
+                  </FunnelChart>
+                )}
               </ResponsiveContainer>
             </div>
           ) : (
@@ -418,19 +501,17 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, onBack }) => {
                      <th className="px-6 py-4 text-right">Receita (Ads)</th>
                      <th className="px-6 py-4 text-right">ROAS</th>
                      <th className="px-6 py-4 text-right">CTR</th>
-                     <th className="px-6 py-4 text-center">Gráfico</th>
                   </tr>
                </thead>
                <tbody className="divide-y divide-slate-100">
                   {campaigns.length > 0 ? campaigns.map((camp) => {
                      const cpl = camp.leads > 0 ? camp.spend / camp.leads : 0;
                      const cps = camp.purchases > 0 ? camp.spend / camp.purchases : 0;
-                     const isSelected = selectedCampaign?.id === camp.id;
 
                      return (
                      <tr 
                         key={camp.id} 
-                        className={`transition-colors ${isSelected ? 'bg-indigo-50/70 border-l-4 border-indigo-500' : 'hover:bg-slate-50'}`}
+                        className="transition-colors hover:bg-slate-50"
                      >
                         <td className="px-6 py-4 font-medium text-slate-700">{camp.name}</td>
                         <td className="px-6 py-4">
@@ -454,19 +535,10 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, onBack }) => {
                         <td className="px-6 py-4 text-right text-slate-500">
                            {camp.impressions > 0 ? ((camp.clicks / camp.impressions) * 100).toFixed(2) : 0}%
                         </td>
-                        <td className="px-6 py-4 text-center">
-                           <button 
-                             onClick={() => handleViewCampaign(camp)}
-                             className={`p-2 rounded-lg transition-colors ${isSelected ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-indigo-600 hover:bg-slate-100'}`}
-                             title="Ver Performance Histórica"
-                           >
-                             <BarChart3 size={18} />
-                           </button>
-                        </td>
                      </tr>
                   );}) : (
                     <tr>
-                      <td colSpan={11} className="px-6 py-8 text-center text-slate-500">
+                      <td colSpan={10} className="px-6 py-8 text-center text-slate-500">
                         Nenhuma campanha encontrada para este cliente neste período.
                       </td>
                     </tr>
