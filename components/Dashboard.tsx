@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { clientService } from '../services/clientService';
 import { contractService } from '../services/contractService';
 import { Client, Contract } from '../types';
-import { Search, Plus, Filter, MoreVertical, TrendingUp, AlertTriangle, Loader2, RefreshCw, Copy, Check, Calendar, ChevronRight } from 'lucide-react';
+import { Search, Plus, Filter, MoreVertical, TrendingUp, AlertTriangle, Loader2, RefreshCw, Copy, Check, Calendar, ChevronRight, Trash2, PauseCircle, PlayCircle, XCircle } from 'lucide-react';
 import { NewClientModal } from './NewClientModal';
 
 interface DashboardProps {
@@ -18,6 +18,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectClient }) => {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [copyingId, setCopyingId] = useState<string | null>(null);
   const [selectedPeriod, setSelectedPeriod] = useState<number>(30); // Default 30 days
+  const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
 
   const fetchData = async () => {
     setLoading(true);
@@ -45,6 +46,17 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectClient }) => {
   useEffect(() => {
     fetchData();
   }, [selectedPeriod]);
+
+  // Fecha o menu ao clicar fora
+  useEffect(() => {
+    const handleClickOutside = () => setActiveMenuId(null);
+    if (activeMenuId) {
+      document.addEventListener('click', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('click', handleClickOutside);
+    };
+  }, [activeMenuId]);
 
   const handleCopyReport = async (e: React.MouseEvent, client: Client) => {
     e.stopPropagation();
@@ -86,6 +98,52 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectClient }) => {
     } finally {
       setCopyingId(null);
     }
+  };
+
+  const handleMenuToggle = (e: React.MouseEvent, clientId: string) => {
+    e.stopPropagation();
+    // Se clicar no mesmo botão, fecha. Se for outro, abre o outro.
+    setActiveMenuId(prev => prev === clientId ? null : clientId);
+  };
+
+  const handleStatusChange = (e: React.MouseEvent, client: Client) => {
+    e.stopPropagation();
+    // Fechar menu primeiro para evitar conflitos de UI
+    setActiveMenuId(null);
+
+    // Pequeno timeout para garantir que a UI atualizou antes do confirm travar a thread
+    setTimeout(async () => {
+        const newStatus = client.status === 'active' ? 'paused' : 'active';
+        const actionName = newStatus === 'active' ? 'ativar' : 'pausar';
+        
+        if (!window.confirm(`Deseja realmente ${actionName} o cliente ${client.company}?`)) return;
+
+        try {
+          await clientService.updateClientStatus(client.id, newStatus);
+          fetchData(); 
+        } catch (error) {
+          alert(`Erro ao atualizar status: ${error}`);
+        }
+    }, 100);
+  };
+
+  const handleDeleteClient = (e: React.MouseEvent, client: Client) => {
+    e.stopPropagation();
+    // Fechar menu primeiro
+    setActiveMenuId(null);
+
+    // Timeout para evitar que o clique se perca
+    setTimeout(async () => {
+        if (!window.confirm(`ATENÇÃO: Deseja EXCLUIR PERMANENTEMENTE o cliente ${client.company}?\n\nIsso removerá todos os dados e histórico associado (Campanhas, Métricas, Tarefas, Contratos). Essa ação não pode ser desfeita.`)) return;
+
+        try {
+          await clientService.deleteClient(client.id);
+          fetchData(); // Atualiza a lista
+        } catch (error: any) {
+          console.error(error);
+          alert(`Erro ao excluir cliente: ${error.message || error}`);
+        }
+    }, 100);
   };
 
   const filteredClients = clients.filter(c => 
@@ -196,7 +254,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectClient }) => {
         </div>
 
         {/* Desktop Table - Hidden on Mobile */}
-        <div className="hidden md:block overflow-x-auto">
+        <div className="hidden md:block overflow-x-auto min-h-[300px]">
           <table className="w-full text-left">
             <thead className="bg-slate-50 text-slate-500 font-medium text-xs uppercase tracking-wider">
               <tr>
@@ -220,13 +278,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectClient }) => {
                 return (
                   <tr key={client.id} className="hover:bg-slate-50 transition-colors group cursor-pointer" onClick={() => onSelectClient(client)}>
                     <td className="px-6 py-4">
-                      <div>
+                      <div className={client.status === 'paused' ? 'opacity-50' : ''}>
                         <p className="font-semibold text-slate-800">{client.company}</p>
                         <p className="text-xs text-slate-500">{client.name}</p>
                       </div>
                     </td>
                     <td className="px-6 py-4 text-center">
-                       <span className={`inline-block w-2.5 h-2.5 rounded-full ${client.status === 'active' ? 'bg-green-500' : 'bg-slate-300'}`}></span>
+                       <span className={`inline-block w-2.5 h-2.5 rounded-full ${client.status === 'active' ? 'bg-green-500' : 'bg-slate-300'}`} title={client.status}></span>
                     </td>
                     <td className="px-6 py-4 text-right font-medium text-indigo-600">
                       {client.total_leads?.toLocaleString() || '0'}
@@ -241,7 +299,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectClient }) => {
                          {roas.toFixed(2)}x
                        </span>
                     </td>
-                    <td className="px-6 py-4 text-right">
+                    <td className="px-6 py-4 text-right relative">
                       <div className="flex items-center justify-end gap-2">
                         <button 
                           onClick={(e) => handleCopyReport(e, client)}
@@ -250,7 +308,35 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectClient }) => {
                         >
                           {isCopying ? <Loader2 size={18} className="animate-spin" /> : isCopied ? <Check size={18} /> : <Copy size={18} />}
                         </button>
-                        <MoreVertical size={18} className="text-slate-400" />
+                        
+                        <div className="relative">
+                          <button 
+                            onClick={(e) => handleMenuToggle(e, client.id)}
+                            className={`p-2 rounded-full transition-colors ${activeMenuId === client.id ? 'bg-slate-200 text-slate-700' : 'hover:bg-slate-100 text-slate-400'}`}
+                          >
+                            <MoreVertical size={18} />
+                          </button>
+                          
+                          {/* Dropdown Menu */}
+                          {activeMenuId === client.id && (
+                            <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl border border-slate-100 z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200 origin-top-right">
+                              <button 
+                                onClick={(e) => handleStatusChange(e, client)}
+                                className="w-full text-left px-4 py-3 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                              >
+                                {client.status === 'active' ? <PauseCircle size={16} className="text-amber-500" /> : <PlayCircle size={16} className="text-green-500" />}
+                                {client.status === 'active' ? 'Pausar Cliente' : 'Reativar Cliente'}
+                              </button>
+                              <button 
+                                onClick={(e) => handleDeleteClient(e, client)}
+                                className="w-full text-left px-4 py-3 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2 border-t border-slate-50"
+                              >
+                                <Trash2 size={16} />
+                                Excluir Cliente
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </td>
                   </tr>
@@ -261,31 +347,60 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectClient }) => {
         </div>
 
         {/* Mobile View - Cards Layout */}
-        <div className="md:hidden divide-y divide-slate-100">
+        <div className="md:hidden divide-y divide-slate-100 pb-10">
           {!loading && filteredClients.map((client) => {
              const roas = client.total_spend > 0 ? client.total_revenue / client.total_spend : 0;
              const cpl = client.total_leads > 0 ? client.total_spend / client.total_leads : 0;
              const isCopied = copiedId === client.id;
 
              return (
-               <div key={client.id} className="p-4 active:bg-slate-50" onClick={() => onSelectClient(client)}>
-                  <div className="flex justify-between items-start mb-3">
-                    <div>
+               <div key={client.id} className={`p-4 active:bg-slate-50 relative ${client.status === 'paused' ? 'bg-slate-50' : ''}`} onClick={() => onSelectClient(client)}>
+                  <div className="flex justify-between items-start mb-3 pr-8">
+                    <div className={client.status === 'paused' ? 'opacity-60' : ''}>
                       <h4 className="font-bold text-slate-800">{client.company}</h4>
                       <p className="text-xs text-slate-500">{client.name}</p>
                     </div>
-                    <div className="flex gap-2">
+                    
+                    {/* Action Menu Mobile */}
+                    <div className="absolute top-4 right-4 flex items-center gap-1">
                        <button 
                         onClick={(e) => handleCopyReport(e, client)}
                         className={`p-2 rounded-lg ${isCopied ? 'bg-green-100 text-green-600' : 'bg-slate-100 text-slate-500'}`}
                        >
                          {isCopied ? <Check size={16} /> : <Copy size={16} />}
                        </button>
-                       <div className={`w-3 h-3 rounded-full mt-2 ${client.status === 'active' ? 'bg-green-500' : 'bg-slate-300'}`}></div>
+
+                       <div className="relative">
+                          <button 
+                            onClick={(e) => handleMenuToggle(e, client.id)}
+                            className="p-2 rounded-lg bg-slate-100 text-slate-500"
+                          >
+                            <MoreVertical size={16} />
+                          </button>
+                          
+                          {activeMenuId === client.id && (
+                            <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl border border-slate-100 z-50 overflow-hidden">
+                              <button 
+                                onClick={(e) => handleStatusChange(e, client)}
+                                className="w-full text-left px-4 py-3 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                              >
+                                {client.status === 'active' ? <PauseCircle size={16} className="text-amber-500" /> : <PlayCircle size={16} className="text-green-500" />}
+                                {client.status === 'active' ? 'Pausar' : 'Reativar'}
+                              </button>
+                              <button 
+                                onClick={(e) => handleDeleteClient(e, client)}
+                                className="w-full text-left px-4 py-3 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2 border-t border-slate-50"
+                              >
+                                <Trash2 size={16} />
+                                Excluir
+                              </button>
+                            </div>
+                          )}
+                       </div>
                     </div>
                   </div>
                   
-                  <div className="grid grid-cols-2 gap-y-3 gap-x-4 bg-slate-50 p-3 rounded-lg border border-slate-100">
+                  <div className={`grid grid-cols-2 gap-y-3 gap-x-4 bg-slate-50 p-3 rounded-lg border border-slate-100 ${client.status === 'paused' ? 'opacity-60' : ''}`}>
                      <div>
                         <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Investimento</p>
                         <p className="text-sm font-bold text-slate-700">R$ {client.total_spend?.toLocaleString('pt-BR')}</p>
@@ -303,8 +418,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectClient }) => {
                         <p className={`text-sm font-extrabold ${roas >= 2 ? 'text-green-600' : 'text-amber-600'}`}>{roas.toFixed(2)}x</p>
                      </div>
                   </div>
-                  <div className="mt-3 flex items-center justify-center text-xs text-indigo-600 font-bold gap-1">
-                    Ver Detalhes <ChevronRight size={14} />
+                  <div className="mt-3 flex items-center justify-between">
+                     <div className="flex items-center gap-2">
+                       <span className={`inline-block w-2 h-2 rounded-full ${client.status === 'active' ? 'bg-green-500' : 'bg-slate-300'}`}></span>
+                       <span className="text-xs text-slate-400 capitalize">{client.status === 'active' ? 'Ativo' : 'Pausado'}</span>
+                     </div>
+                     <div className="flex items-center text-xs text-indigo-600 font-bold gap-1">
+                        Ver Detalhes <ChevronRight size={14} />
+                     </div>
                   </div>
                </div>
              );

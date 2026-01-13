@@ -125,6 +125,58 @@ export const clientService = {
     }
   },
 
+  // Update Client Status (Pause/Activate)
+  async updateClientStatus(clientId: string, status: 'active' | 'paused' | 'churned') {
+    const { error } = await supabase
+      .from('clients')
+      .update({ status })
+      .eq('id', clientId);
+
+    if (error) throw error;
+  },
+
+  // Delete Client with Manual Cascade
+  async deleteClient(clientId: string) {
+    console.log("Iniciando exclusão manual em cascata para cliente:", clientId);
+
+    try {
+      // 1. Deletar Tarefas vinculadas
+      await supabase.from('tasks').delete().eq('client_id', clientId);
+
+      // 2. Deletar Vendas (Deals) vinculadas
+      await supabase.from('deals').delete().eq('client_id', clientId);
+
+      // 3. Deletar Contratos vinculados
+      await supabase.from('contracts').delete().eq('client_id', clientId);
+
+      // 4. Buscar Campanhas para deletar Métricas primeiro
+      const { data: campaigns } = await supabase
+        .from('campaigns')
+        .select('id')
+        .eq('client_id', clientId);
+      
+      if (campaigns && campaigns.length > 0) {
+        const campaignIds = campaigns.map(c => c.id);
+        // Deletar métricas
+        await supabase.from('campaign_metrics').delete().in('campaign_id', campaignIds);
+        // Deletar campanhas
+        await supabase.from('campaigns').delete().eq('client_id', clientId);
+      }
+
+      // 5. Finalmente, deletar o Cliente
+      const { error } = await supabase
+        .from('clients')
+        .delete()
+        .eq('id', clientId);
+
+      if (error) throw error;
+    
+    } catch (error) {
+      console.error("Erro durante exclusão em cascata:", error);
+      throw error;
+    }
+  },
+
   // Fetch campaigns for a specific client AND aggregate their metrics filtered by date
   async getCampaigns(clientId: string, days = 30) {
     const startDate = new Date();
