@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { Client, Contract, Campaign, DailyMetric, Deal } from '../types';
-import { clientService } from '../services/clientService';
+import { clientService, getLocalDateString } from '../services/clientService';
 import { contractService } from '../services/contractService';
 import { dealService } from '../services/dealService';
-import { ArrowUpRight, ArrowDownRight, DollarSign, Target, TrendingUp, AlertTriangle, Calendar, Download, Loader2, Users, ShoppingBag, Plus, Copy, Check, BarChart, PieChart, Filter, ChevronLeft } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, DollarSign, Target, TrendingUp, AlertTriangle, Calendar, Download, Loader2, Users, ShoppingBag, Plus, Copy, Check, BarChart, PieChart, Filter, ChevronLeft, ChevronDown } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, ComposedChart, Bar, Line, FunnelChart, Funnel, LabelList, Cell } from 'recharts';
 import { NewSaleModal } from './NewSaleModal';
 
@@ -11,6 +11,8 @@ interface ClientViewProps {
   client: Client;
   onBack: () => void;
 }
+
+type DateRangeOption = '7D' | '14D' | '30D' | 'CUSTOM';
 
 export const ClientView: React.FC<ClientViewProps> = ({ client, onBack }) => {
   const [loading, setLoading] = useState(true);
@@ -20,10 +22,52 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, onBack }) => {
   const [deals, setDeals] = useState<Deal[]>([]);
   const [isSaleModalOpen, setIsSaleModalOpen] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [selectedPeriod, setSelectedPeriod] = useState<number>(30); // Default 30 days
   const [activeChart, setActiveChart] = useState<'finance' | 'acquisition' | 'funnel'>('finance');
   
   const [currentClient, setCurrentClient] = useState<Client>(client);
+
+  // Date State
+  const [dateOption, setDateOption] = useState<DateRangeOption>('30D');
+  const [dateRange, setDateRange] = useState({ start: '', end: '' });
+  const [showDatePicker, setShowDatePicker] = useState(false);
+
+  // Calcula datas iniciais
+  useEffect(() => {
+    const today = new Date();
+    let start = new Date();
+    let end = new Date();
+
+    if (dateOption === 'CUSTOM') return;
+
+    switch (dateOption) {
+      case '7D':
+        start.setDate(today.getDate() - 7);
+        break;
+      case '14D':
+        start.setDate(today.getDate() - 14);
+        break;
+      case '30D':
+        start.setDate(today.getDate() - 30);
+        break;
+    }
+
+    setDateRange({
+      start: getLocalDateString(start),
+      end: getLocalDateString(end)
+    });
+  }, [dateOption]);
+
+  // Fecha dropdown ao clicar fora
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+        const target = e.target as HTMLElement;
+        if (!target.closest('#date-picker-container')) {
+            setShowDatePicker(false);
+        }
+    };
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, []);
 
   const calculateFilteredStats = () => {
      const totalSpend = campaigns.reduce((acc, c) => acc + (c.spend || 0), 0);
@@ -37,11 +81,16 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, onBack }) => {
   const filteredStats = calculateFilteredStats();
 
   const fetchData = async () => {
+    if (!dateRange.start || !dateRange.end) return;
+    
     setLoading(true);
     try {
+      const startDateStr = dateRange.start;
+      const endDateStr = dateRange.end;
+
       const [campData, metricsData, contractData, dealsData] = await Promise.all([
-        clientService.getCampaigns(currentClient.id, selectedPeriod),
-        clientService.getClientMetrics(currentClient.id, selectedPeriod),
+        clientService.getCampaigns(currentClient.id, startDateStr, endDateStr),
+        clientService.getClientMetrics(currentClient.id, startDateStr, endDateStr),
         contractService.getClientContract(currentClient.id),
         dealService.getDeals(currentClient.id)
       ]);
@@ -64,7 +113,7 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, onBack }) => {
 
   useEffect(() => {
     fetchData();
-  }, [client.id, selectedPeriod]);
+  }, [client.id, dateRange]);
 
   const acquisitionChartData = chartData.map(item => ({
     ...item,
@@ -79,13 +128,13 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, onBack }) => {
   ];
 
   const handleCopyReport = () => {
-    const today = new Date();
-    const start = new Date();
-    start.setDate(today.getDate() - selectedPeriod);
-    const periodStr = `${start.toLocaleDateString('pt-BR', {day: '2-digit', month: '2-digit'})} - ${today.toLocaleDateString('pt-BR', {day: '2-digit', month: '2-digit'})}`;
+    const startDateParts = dateRange.start.split('-');
+    const endDateParts = dateRange.end.split('-');
+    const periodStr = `${startDateParts[2]}/${startDateParts[1]} - ${endDateParts[2]}/${endDateParts[1]}`;
+    const daysDiff = Math.ceil((new Date(dateRange.end).getTime() - new Date(dateRange.start).getTime()) / (1000 * 3600 * 24));
 
     let text = `Olá, @${currentClient.name || 'Cliente'}\n` +
-      `📊 Relatório (${selectedPeriod} dias)\n\n` +
+      `📊 Relatório (${daysDiff} dias)\n\n` +
       `Período: ${periodStr}\n\n`;
 
     const activeCampaigns = campaigns.filter(c => c.spend > 0);
@@ -105,10 +154,15 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, onBack }) => {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  // Calcula a diferença de dias para exibir nos KPIs
+  const daysDiff = dateRange.start && dateRange.end 
+    ? Math.max(0, Math.ceil((new Date(dateRange.end).getTime() - new Date(dateRange.start).getTime()) / (1000 * 3600 * 24)))
+    : 30;
+
   const kpis = [
-    { label: 'Leads', value: filteredStats.totalLeads.toLocaleString('pt-BR'), sub: `${selectedPeriod}d`, trend: 'up', icon: Users, color: 'text-orange-500' },
-    { label: 'Investido', value: `R$ ${filteredStats.totalSpend.toLocaleString('pt-BR')}`, sub: `${selectedPeriod}d`, trend: 'up', icon: DollarSign, color: 'text-blue-500' },
-    { label: 'Receita', value: `R$ ${filteredStats.totalRevenue.toLocaleString('pt-BR')}`, sub: `${selectedPeriod}d`, trend: 'up', icon: Target, color: 'text-green-500' },
+    { label: 'Leads', value: filteredStats.totalLeads.toLocaleString('pt-BR'), sub: `${daysDiff}d`, trend: 'up', icon: Users, color: 'text-orange-500' },
+    { label: 'Investido', value: `R$ ${filteredStats.totalSpend.toLocaleString('pt-BR')}`, sub: `${daysDiff}d`, trend: 'up', icon: DollarSign, color: 'text-blue-500' },
+    { label: 'Receita', value: `R$ ${filteredStats.totalRevenue.toLocaleString('pt-BR')}`, sub: `${daysDiff}d`, trend: 'up', icon: Target, color: 'text-green-500' },
     { label: 'ROAS', value: `${(filteredStats.roas || 0).toFixed(2)}x`, sub: 'Meta 4x', trend: (filteredStats.roas || 0) > 4 ? 'up' : 'down', icon: TrendingUp, color: 'text-purple-500' },
     { label: 'ROI Real', value: `${((filteredStats.roi || 0) * 100).toFixed(1)}%`, sub: 'Final', trend: 'up', icon: BarChart, color: 'text-emerald-500' },
   ];
@@ -128,6 +182,13 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, onBack }) => {
       );
     }
     return null;
+  };
+
+  const dateOptionLabels: Record<string, string> = {
+    '7D': 'Últimos 7 dias',
+    '14D': 'Últimos 14 dias',
+    '30D': 'Últimos 30 dias',
+    'CUSTOM': 'Personalizado'
   };
 
   if (loading && campaigns.length === 0) {
@@ -158,18 +219,89 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, onBack }) => {
         </div>
         
         <div className="flex flex-col sm:flex-row items-center gap-2">
-           <div className="relative w-full sm:w-auto">
-              <select 
-                 value={selectedPeriod}
-                 onChange={(e) => setSelectedPeriod(Number(e.target.value))}
-                 className="appearance-none w-full bg-slate-50 border border-slate-300 text-slate-700 py-2 pl-3 pr-8 rounded-lg text-sm focus:outline-none font-medium"
-              >
-                 <option value={7}>Últimos 7 dias</option>
-                 <option value={15}>Últimos 15 dias</option>
-                 <option value={30}>Últimos 30 dias</option>
-                 <option value={90}>Trimestre</option>
-              </select>
-              <Calendar className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" size={16} />
+           
+           {/* Seletor de Data Customizado (Igual ao Dashboard) */}
+           <div className="relative w-full sm:w-auto" id="date-picker-container">
+             <button 
+              onClick={() => setShowDatePicker(!showDatePicker)}
+              className="w-full sm:w-[220px] bg-slate-50 border border-slate-300 text-slate-700 py-2.5 px-3 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 flex items-center justify-between font-medium hover:bg-slate-100 transition-colors"
+             >
+               <div className="flex items-center gap-2 overflow-hidden">
+                 <Calendar size={16} className="text-slate-500 shrink-0" />
+                 <span className="truncate">
+                   {dateOption === 'CUSTOM' 
+                      ? `${dateRange.start.split('-')[2]}/${dateRange.start.split('-')[1]} - ${dateRange.end.split('-')[2]}/${dateRange.end.split('-')[1]}` 
+                      : dateOptionLabels[dateOption]
+                   }
+                 </span>
+               </div>
+               <ChevronDown size={14} className={`text-slate-400 transition-transform ${showDatePicker ? 'rotate-180' : ''}`} />
+             </button>
+             
+             {showDatePicker && (
+               <div className="absolute top-full right-0 mt-2 w-[320px] bg-white rounded-lg shadow-xl border border-slate-200 z-50 p-4 animate-in fade-in zoom-in-95 duration-200">
+                 
+                 {/* Inputs de Data */}
+                 <div className="grid grid-cols-2 gap-3 mb-4">
+                     <div>
+                       <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Data Início</label>
+                       <input 
+                        type="date" 
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                        value={dateRange.start}
+                        onChange={(e) => {
+                          setDateOption('CUSTOM');
+                          setDateRange(prev => ({ ...prev, start: e.target.value }));
+                        }}
+                       />
+                     </div>
+                     <div>
+                       <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Data Fim</label>
+                       <input 
+                        type="date" 
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                        value={dateRange.end}
+                        onChange={(e) => {
+                          setDateOption('CUSTOM');
+                          setDateRange(prev => ({ ...prev, end: e.target.value }));
+                        }}
+                       />
+                     </div>
+                 </div>
+
+                 {/* Botões Rápidos */}
+                 <div className="border-t border-slate-100 pt-3">
+                   <p className="text-[10px] font-bold text-slate-400 uppercase mb-2">Períodos Rápidos</p>
+                   <div className="grid grid-cols-3 gap-2">
+                     <button
+                      onClick={() => setDateOption('7D')}
+                      className={`px-2 py-2 text-xs font-medium rounded-md transition-colors ${dateOption === '7D' ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-50 text-slate-600 hover:bg-slate-100'}`}
+                     >
+                       7 dias
+                     </button>
+                     <button
+                      onClick={() => setDateOption('14D')}
+                      className={`px-2 py-2 text-xs font-medium rounded-md transition-colors ${dateOption === '14D' ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-50 text-slate-600 hover:bg-slate-100'}`}
+                     >
+                       14 dias
+                     </button>
+                     <button
+                      onClick={() => setDateOption('30D')}
+                      className={`px-2 py-2 text-xs font-medium rounded-md transition-colors ${dateOption === '30D' ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-50 text-slate-600 hover:bg-slate-100'}`}
+                     >
+                       30 dias
+                     </button>
+                   </div>
+                 </div>
+                 
+                 <button 
+                  onClick={() => setShowDatePicker(false)}
+                  className="w-full mt-4 bg-indigo-600 text-white text-xs font-bold py-2.5 rounded-lg hover:bg-indigo-700 transition-colors"
+                 >
+                   Aplicar Filtro
+                 </button>
+               </div>
+             )}
            </div>
 
            <div className="flex gap-2 w-full sm:w-auto">

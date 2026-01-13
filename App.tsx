@@ -5,7 +5,7 @@ import { ClientView } from './components/ClientView';
 import { ProfessionalDashboard } from './components/ProfessionalDashboard';
 import { Client, ViewState, Project, Task, Goal, TaskCategory } from './types';
 import { taskService } from './services/taskService';
-import { clientService } from './services/clientService'; // Necessário para listar clientes na modal de tarefas
+import { clientService, getLocalDateString } from './services/clientService'; // Necessário para listar clientes na modal de tarefas
 import { Loader2 } from 'lucide-react';
 
 const App: React.FC = () => {
@@ -41,12 +41,17 @@ const App: React.FC = () => {
   const fetchTaskData = async () => {
     setLoadingTasks(true);
     try {
+      // Calcular range padrão (30 dias) para buscar clientes
+      const today = new Date();
+      const start = new Date();
+      start.setDate(today.getDate() - 30);
+
       // Carrega tarefas, projetos, metas E clientes (para poder vincular na criação)
       const [fetchedTasks, fetchedProjects, fetchedGoals, fetchedClients] = await Promise.all([
         taskService.getTasks(),
         taskService.getProjects(),
         taskService.getGoals(),
-        clientService.getClients(30) // Busca clientes (usando 30 dias padrão para métricas, mas aqui queremos só a lista)
+        clientService.getClients(getLocalDateString(start), getLocalDateString(today)) 
       ]);
       setTasks(fetchedTasks);
       setProjects(fetchedProjects);

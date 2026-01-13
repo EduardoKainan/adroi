@@ -1,30 +1,71 @@
-import React, { useState, useEffect } from 'react';
-import { clientService } from '../services/clientService';
+import React, { useState, useEffect, useRef } from 'react';
+import { clientService, getLocalDateString } from '../services/clientService';
 import { contractService } from '../services/contractService';
 import { Client, Contract } from '../types';
-import { Search, Plus, Filter, MoreVertical, TrendingUp, AlertTriangle, Loader2, RefreshCw, Copy, Check, Calendar, ChevronRight, Trash2, PauseCircle, PlayCircle, XCircle } from 'lucide-react';
+import { Search, Plus, MoreVertical, TrendingUp, AlertTriangle, Loader2, RefreshCw, Copy, Check, Calendar, ChevronRight, Trash2, PauseCircle, PlayCircle, PenLine, ChevronDown } from 'lucide-react';
 import { NewClientModal } from './NewClientModal';
 
 interface DashboardProps {
   onSelectClient: (client: Client) => void;
 }
 
+type DateRangeOption = '7D' | '14D' | '30D' | 'CUSTOM';
+
 export const Dashboard: React.FC<DashboardProps> = ({ onSelectClient }) => {
   const [clients, setClients] = useState<Client[]>([]);
   const [contracts, setContracts] = useState<Record<string, Contract>>({});
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('');
+  
+  // Date State
+  const [dateOption, setDateOption] = useState<DateRangeOption>('30D');
+  const [dateRange, setDateRange] = useState({ start: '', end: '' });
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  
+  // Modal & Edit State
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [clientToEdit, setClientToEdit] = useState<Client | null>(null);
+
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [copyingId, setCopyingId] = useState<string | null>(null);
-  const [selectedPeriod, setSelectedPeriod] = useState<number>(30); // Default 30 days
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
 
+  // Calcula as datas iniciais baseadas na opção selecionada
+  useEffect(() => {
+    const today = new Date();
+    let start = new Date();
+    let end = new Date(); // Hoje
+
+    if (dateOption === 'CUSTOM') {
+       // Se for customizado, não altera automaticamente os inputs
+       return;
+    }
+
+    switch (dateOption) {
+      case '7D':
+        start.setDate(today.getDate() - 7);
+        break;
+      case '14D':
+        start.setDate(today.getDate() - 14);
+        break;
+      case '30D':
+        start.setDate(today.getDate() - 30);
+        break;
+    }
+
+    setDateRange({
+      start: getLocalDateString(start),
+      end: getLocalDateString(end)
+    });
+  }, [dateOption]);
+
   const fetchData = async () => {
+    if (!dateRange.start || !dateRange.end) return;
+
     setLoading(true);
     try {
       const [clientsData, contractsData] = await Promise.all([
-        clientService.getClients(selectedPeriod),
+        clientService.getClients(dateRange.start, dateRange.end),
         contractService.getActiveContracts()
       ]);
       
@@ -45,33 +86,53 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectClient }) => {
 
   useEffect(() => {
     fetchData();
-  }, [selectedPeriod]);
+  }, [dateRange]); // Recarrega sempre que o range de datas mudar
 
   // Fecha o menu ao clicar fora
   useEffect(() => {
-    const handleClickOutside = () => setActiveMenuId(null);
-    if (activeMenuId) {
-      document.addEventListener('click', handleClickOutside);
-    }
+    const handleClickOutside = (e: MouseEvent) => {
+      setActiveMenuId(null);
+      
+      // Fecha o date picker se clicar fora dele
+      const target = e.target as HTMLElement;
+      if (!target.closest('#date-picker-container')) {
+        setShowDatePicker(false);
+      }
+    };
+    
+    document.addEventListener('click', handleClickOutside);
     return () => {
       document.removeEventListener('click', handleClickOutside);
     };
-  }, [activeMenuId]);
+  }, []);
+
+  const handleOpenNewClientModal = () => {
+    setClientToEdit(null);
+    setIsModalOpen(true);
+  };
+
+  const handleEditClient = (e: React.MouseEvent, client: Client) => {
+    e.stopPropagation();
+    setActiveMenuId(null);
+    setClientToEdit(client);
+    setIsModalOpen(true);
+  };
 
   const handleCopyReport = async (e: React.MouseEvent, client: Client) => {
     e.stopPropagation();
     setCopyingId(client.id);
     
     try {
-      const campaigns = await clientService.getCampaigns(client.id, selectedPeriod);
-      const today = new Date();
-      const start = new Date();
-      start.setDate(today.getDate() - selectedPeriod);
-      const periodStr = `${start.toLocaleDateString('pt-BR', {day: '2-digit', month: '2-digit'})} - ${today.toLocaleDateString('pt-BR', {day: '2-digit', month: '2-digit'})}`;
+      const campaigns = await clientService.getCampaigns(client.id, dateRange.start, dateRange.end);
+      
+      // Formata data bonita para o relatório
+      const startDateParts = dateRange.start.split('-');
+      const endDateParts = dateRange.end.split('-');
+      const periodStr = `${startDateParts[2]}/${startDateParts[1]} - ${endDateParts[2]}/${endDateParts[1]}`;
 
       let text = `Olá, boa tarde doutor @${client.name || 'Cliente'}\n` +
         `Tudo bem?\n\n` +
-        `📊 Passando aqui para compartilhar o relatório (${selectedPeriod} dias) da nossa campanha de tráfego. Segue um resumo dos principais resultados\n\n` +
+        `📊 Passando aqui para compartilhar o relatório da nossa campanha de tráfego. Segue um resumo dos principais resultados\n\n` +
         `Período (${periodStr}).\n\n`;
 
       const activeCampaigns = campaigns.filter(c => c.spend > 0);
@@ -102,16 +163,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectClient }) => {
 
   const handleMenuToggle = (e: React.MouseEvent, clientId: string) => {
     e.stopPropagation();
-    // Se clicar no mesmo botão, fecha. Se for outro, abre o outro.
     setActiveMenuId(prev => prev === clientId ? null : clientId);
   };
 
   const handleStatusChange = (e: React.MouseEvent, client: Client) => {
     e.stopPropagation();
-    // Fechar menu primeiro para evitar conflitos de UI
     setActiveMenuId(null);
 
-    // Pequeno timeout para garantir que a UI atualizou antes do confirm travar a thread
     setTimeout(async () => {
         const newStatus = client.status === 'active' ? 'paused' : 'active';
         const actionName = newStatus === 'active' ? 'ativar' : 'pausar';
@@ -129,16 +187,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectClient }) => {
 
   const handleDeleteClient = (e: React.MouseEvent, client: Client) => {
     e.stopPropagation();
-    // Fechar menu primeiro
     setActiveMenuId(null);
 
-    // Timeout para evitar que o clique se perca
     setTimeout(async () => {
         if (!window.confirm(`ATENÇÃO: Deseja EXCLUIR PERMANENTEMENTE o cliente ${client.company}?\n\nIsso removerá todos os dados e histórico associado (Campanhas, Métricas, Tarefas, Contratos). Essa ação não pode ser desfeita.`)) return;
 
         try {
           await clientService.deleteClient(client.id);
-          fetchData(); // Atualiza a lista
+          fetchData(); 
         } catch (error: any) {
           console.error(error);
           alert(`Erro ao excluir cliente: ${error.message || error}`);
@@ -157,12 +213,21 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectClient }) => {
     (c: Contract) => (c.days_remaining !== undefined) && c.days_remaining >= 0 && c.days_remaining <= 30
   ).length;
 
+  // Labels map for display
+  const dateOptionLabels: Record<string, string> = {
+    '7D': 'Últimos 7 dias',
+    '14D': 'Últimos 14 dias',
+    '30D': 'Últimos 30 dias',
+    'CUSTOM': 'Personalizado'
+  };
+
   return (
     <div className="space-y-6 md:space-y-8 animate-fade-in pb-10">
       <NewClientModal 
         isOpen={isModalOpen} 
         onClose={() => setIsModalOpen(false)} 
-        onSuccess={fetchData} 
+        onSuccess={fetchData}
+        clientToEdit={clientToEdit}
       />
 
       {/* Header Stats - Grid adaptável */}
@@ -171,7 +236,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectClient }) => {
           <div className="flex justify-between items-start mb-1">
              <p className="text-indigo-100 text-xs md:text-sm font-medium">Receita Gerada</p>
              <span className="text-[10px] bg-indigo-500/50 px-2 py-0.5 rounded text-indigo-100 flex items-center gap-1">
-               <Calendar size={10} /> {selectedPeriod} dias
+               <Calendar size={10} /> {dateOption === 'CUSTOM' ? 'Período' : dateOptionLabels[dateOption]}
              </span>
           </div>
           <h2 className="text-2xl md:text-3xl font-bold">R$ {totalRevenue.toLocaleString('pt-BR')}</h2>
@@ -213,22 +278,93 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectClient }) => {
           </div>
           
           <div className="flex flex-col lg:flex-row items-center gap-3 w-full">
-            <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto flex-1">
-                {/* Seletor de Período */}
-                <div className="relative w-full sm:w-auto">
-                   <select 
-                      value={selectedPeriod}
-                      onChange={(e) => setSelectedPeriod(Number(e.target.value))}
-                      className="appearance-none w-full bg-slate-50 border border-slate-300 text-slate-700 py-2.5 pl-3 pr-8 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer font-medium"
+            <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto flex-1 z-10">
+                {/* Seletor de Data Customizado */}
+                <div className="relative w-full sm:w-auto" id="date-picker-container">
+                   <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowDatePicker(!showDatePicker);
+                    }}
+                    className="w-full sm:w-[220px] bg-slate-50 border border-slate-300 text-slate-700 py-2.5 px-3 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 flex items-center justify-between font-medium hover:bg-slate-100 transition-colors"
                    >
-                      <option value={1}>Último dia</option>
-                      <option value={7}>Últimos 7 dias</option>
-                      <option value={15}>Últimos 15 dias</option>
-                      <option value={30}>Últimos 30 dias</option>
-                      <option value={60}>Últimos 60 dias</option>
-                      <option value={90}>Últimos 90 dias</option>
-                   </select>
-                   <Calendar className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" size={16} />
+                     <div className="flex items-center gap-2 overflow-hidden">
+                       <Calendar size={16} className="text-slate-500 shrink-0" />
+                       <span className="truncate">
+                         {dateOption === 'CUSTOM' 
+                            ? `${dateRange.start.split('-')[2]}/${dateRange.start.split('-')[1]} - ${dateRange.end.split('-')[2]}/${dateRange.end.split('-')[1]}` 
+                            : dateOptionLabels[dateOption]
+                         }
+                       </span>
+                     </div>
+                     <ChevronDown size={14} className={`text-slate-400 transition-transform ${showDatePicker ? 'rotate-180' : ''}`} />
+                   </button>
+                   
+                   {/* Dropdown de Datas e Calendário */}
+                   {showDatePicker && (
+                     <div className="absolute top-full left-0 mt-2 w-[320px] bg-white rounded-lg shadow-xl border border-slate-200 z-50 p-4 animate-in fade-in zoom-in-95 duration-200">
+                       
+                       {/* Seção 1: Inputs de Data (Calendário) */}
+                       <div className="grid grid-cols-2 gap-3 mb-4">
+                           <div>
+                             <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Data Início</label>
+                             <input 
+                              type="date" 
+                              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                              value={dateRange.start}
+                              onChange={(e) => {
+                                setDateOption('CUSTOM');
+                                setDateRange(prev => ({ ...prev, start: e.target.value }));
+                              }}
+                             />
+                           </div>
+                           <div>
+                             <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Data Fim</label>
+                             <input 
+                              type="date" 
+                              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                              value={dateRange.end}
+                              onChange={(e) => {
+                                setDateOption('CUSTOM');
+                                setDateRange(prev => ({ ...prev, end: e.target.value }));
+                              }}
+                             />
+                           </div>
+                       </div>
+
+                       {/* Seção 2: Filtros Rápidos */}
+                       <div className="border-t border-slate-100 pt-3">
+                         <p className="text-[10px] font-bold text-slate-400 uppercase mb-2">Períodos Rápidos</p>
+                         <div className="grid grid-cols-3 gap-2">
+                           <button
+                            onClick={() => setDateOption('7D')}
+                            className={`px-2 py-2 text-xs font-medium rounded-md transition-colors ${dateOption === '7D' ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-50 text-slate-600 hover:bg-slate-100'}`}
+                           >
+                             7 dias
+                           </button>
+                           <button
+                            onClick={() => setDateOption('14D')}
+                            className={`px-2 py-2 text-xs font-medium rounded-md transition-colors ${dateOption === '14D' ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-50 text-slate-600 hover:bg-slate-100'}`}
+                           >
+                             14 dias
+                           </button>
+                           <button
+                            onClick={() => setDateOption('30D')}
+                            className={`px-2 py-2 text-xs font-medium rounded-md transition-colors ${dateOption === '30D' ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-50 text-slate-600 hover:bg-slate-100'}`}
+                           >
+                             30 dias
+                           </button>
+                         </div>
+                       </div>
+                       
+                       <button 
+                        onClick={() => setShowDatePicker(false)}
+                        className="w-full mt-4 bg-indigo-600 text-white text-xs font-bold py-2.5 rounded-lg hover:bg-indigo-700 transition-colors"
+                       >
+                         Aplicar Filtro
+                       </button>
+                     </div>
+                   )}
                 </div>
 
                 <div className="relative w-full">
@@ -244,7 +380,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectClient }) => {
             </div>
             
             <button 
-              onClick={() => setIsModalOpen(true)}
+              onClick={handleOpenNewClientModal}
               className="w-full lg:w-auto flex items-center justify-center gap-2 bg-indigo-600 text-white px-5 py-2.5 rounded-lg text-sm font-bold hover:bg-indigo-700 shadow-sm transition-all whitespace-nowrap"
             >
                <Plus size={18} />
@@ -321,6 +457,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectClient }) => {
                           {activeMenuId === client.id && (
                             <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl border border-slate-100 z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200 origin-top-right">
                               <button 
+                                onClick={(e) => handleEditClient(e, client)}
+                                className="w-full text-left px-4 py-3 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                              >
+                                <PenLine size={16} className="text-indigo-600" />
+                                Editar Cliente
+                              </button>
+                              <button 
                                 onClick={(e) => handleStatusChange(e, client)}
                                 className="w-full text-left px-4 py-3 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
                               >
@@ -380,6 +523,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectClient }) => {
                           
                           {activeMenuId === client.id && (
                             <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl border border-slate-100 z-50 overflow-hidden">
+                              <button 
+                                onClick={(e) => handleEditClient(e, client)}
+                                className="w-full text-left px-4 py-3 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                              >
+                                <PenLine size={16} className="text-indigo-600" />
+                                Editar
+                              </button>
                               <button 
                                 onClick={(e) => handleStatusChange(e, client)}
                                 className="w-full text-left px-4 py-3 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"

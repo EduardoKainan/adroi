@@ -1,14 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Save, Loader2 } from 'lucide-react';
 import { clientService } from '../services/clientService';
+import { Client } from '../types';
 
 interface NewClientModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
+  clientToEdit?: Client | null; // Novo prop para suportar edição
 }
 
-export const NewClientModal: React.FC<NewClientModalProps> = ({ isOpen, onClose, onSuccess }) => {
+export const NewClientModal: React.FC<NewClientModalProps> = ({ isOpen, onClose, onSuccess, clientToEdit }) => {
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
@@ -17,22 +19,47 @@ export const NewClientModal: React.FC<NewClientModalProps> = ({ isOpen, onClose,
     ad_account_id: ''
   });
 
+  // Efeito para preencher o formulário quando entrar em modo de edição
+  useEffect(() => {
+    if (isOpen) {
+      if (clientToEdit) {
+        setFormData({
+          name: clientToEdit.name || '',
+          company: clientToEdit.company || '',
+          email: clientToEdit.email || '',
+          ad_account_id: clientToEdit.ad_account_id || ''
+        });
+      } else {
+        // Reset se for criação
+        setFormData({ name: '', company: '', email: '', ad_account_id: '' });
+      }
+    }
+  }, [isOpen, clientToEdit]);
+
   if (!isOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
-      await clientService.createClient(formData);
+      if (clientToEdit) {
+        // Modo Edição
+        await clientService.updateClient(clientToEdit.id, formData);
+      } else {
+        // Modo Criação
+        await clientService.createClient(formData);
+      }
+      
       onSuccess();
       onClose();
-      setFormData({ name: '', company: '', email: '', ad_account_id: '' });
+      // Resetar form é feito pelo useEffect, mas garantimos limpeza no close
+      if (!clientToEdit) setFormData({ name: '', company: '', email: '', ad_account_id: '' });
+      
     } catch (error: any) {
-      console.error('Error creating client:', error);
+      console.error('Error saving client:', error);
       
       let message = 'Erro desconhecido';
       
-      // Tratamento robusto para extrair a mensagem de erro correta
       if (error?.message) {
         message = error.message;
       } else if (typeof error === 'string') {
@@ -46,13 +73,12 @@ export const NewClientModal: React.FC<NewClientModalProps> = ({ isOpen, onClose,
         }
       }
 
-      // Mensagem amigável para erro de coluna inexistente
       if (message.includes('column') && message.includes('does not exist')) {
         const columnName = message.split('"')[1] || 'desconhecida';
-        message = `Erro de Banco de Dados: A coluna '${columnName}' não existe na tabela. O código foi ajustado, tente novamente.`;
+        message = `Erro de Banco de Dados: A coluna '${columnName}' não existe na tabela.`;
       }
 
-      alert(`Erro ao criar cliente: ${message}`);
+      alert(`Erro ao ${clientToEdit ? 'atualizar' : 'criar'} cliente: ${message}`);
     } finally {
       setLoading(false);
     }
@@ -62,7 +88,9 @@ export const NewClientModal: React.FC<NewClientModalProps> = ({ isOpen, onClose,
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-fade-in">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all scale-100">
         <div className="flex justify-between items-center p-6 border-b border-slate-100">
-          <h3 className="text-xl font-bold text-slate-800">Novo Cliente</h3>
+          <h3 className="text-xl font-bold text-slate-800">
+            {clientToEdit ? 'Editar Cliente' : 'Novo Cliente'}
+          </h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition-colors">
             <X size={24} />
           </button>
@@ -131,7 +159,7 @@ export const NewClientModal: React.FC<NewClientModalProps> = ({ isOpen, onClose,
               className="flex-1 py-2.5 bg-indigo-600 rounded-lg text-white font-medium hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-70"
             >
               {loading ? <Loader2 className="animate-spin" size={20} /> : <Save size={20} />}
-              Salvar Cliente
+              {clientToEdit ? 'Atualizar Cliente' : 'Salvar Cliente'}
             </button>
           </div>
         </form>

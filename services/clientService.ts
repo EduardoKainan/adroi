@@ -2,8 +2,7 @@ import { supabase } from '../lib/supabase';
 import { Client, Campaign, DailyMetric } from '../types';
 
 // Helper para formatar data localmente (YYYY-MM-DD)
-// Evita o problema do toISOString() que usa UTC e pode pegar o dia errado (amanhã) se for tarde da noite
-const getLocalDateString = (date: Date): string => {
+export const getLocalDateString = (date: Date): string => {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
@@ -11,14 +10,9 @@ const getLocalDateString = (date: Date): string => {
 };
 
 export const clientService = {
-  // Fetch all clients with aggregated real-time metrics filtered by date
-  async getClients(days = 30) {
+  // Fetch all clients with aggregated real-time metrics filtered by date range
+  async getClients(startDateStr: string, endDateStr: string) {
     try {
-      // Calcular data de início usando horário local
-      const startDate = new Date();
-      startDate.setDate(startDate.getDate() - days);
-      const startDateStr = getLocalDateString(startDate);
-
       // 1. Busca os clientes
       const { data: clients, error: clientError } = await supabase
         .from('clients')
@@ -41,14 +35,15 @@ export const clientService = {
 
       const campaignIds = campaigns?.map(c => c.id) || [];
 
-      // 3. Busca métricas acumuladas (leads, spend, revenue) FILTRADAS POR DATA LOCAL
+      // 3. Busca métricas acumuladas (leads, spend, revenue) FILTRADAS POR DATA
       let metricsData: any[] = [];
       if (campaignIds.length > 0) {
         const { data: metrics, error: metricsError } = await supabase
           .from('campaign_metrics')
           .select('campaign_id, leads, spend, revenue')
           .in('campaign_id', campaignIds)
-          .gte('date', startDateStr); // Filtro de Data corrigido
+          .gte('date', startDateStr)
+          .lte('date', endDateStr);
         
         if (!metricsError && metrics) {
           metricsData = metrics;
@@ -125,6 +120,27 @@ export const clientService = {
     }
   },
 
+  // Update Client Info (Name, Company, Email, AdAccount)
+  async updateClient(clientId: string, updates: Partial<Client>) {
+    const payload = {
+      name: updates.name,
+      company: updates.company,
+      email: updates.email,
+      ad_account_id: updates.ad_account_id,
+      last_updated: new Date().toISOString()
+    };
+    
+    // Remove undefined keys
+    Object.keys(payload).forEach(key => (payload as any)[key] === undefined && delete (payload as any)[key]);
+
+    const { error } = await supabase
+      .from('clients')
+      .update(payload)
+      .eq('id', clientId);
+
+    if (error) throw error;
+  },
+
   // Update Client Status (Pause/Activate)
   async updateClientStatus(clientId: string, status: 'active' | 'paused' | 'churned') {
     const { error } = await supabase
@@ -137,19 +153,11 @@ export const clientService = {
 
   // Delete Client with Manual Cascade
   async deleteClient(clientId: string) {
-    console.log("Iniciando exclusão manual em cascata para cliente:", clientId);
-
     try {
-      // 1. Deletar Tarefas vinculadas
       await supabase.from('tasks').delete().eq('client_id', clientId);
-
-      // 2. Deletar Vendas (Deals) vinculadas
       await supabase.from('deals').delete().eq('client_id', clientId);
-
-      // 3. Deletar Contratos vinculados
       await supabase.from('contracts').delete().eq('client_id', clientId);
 
-      // 4. Buscar Campanhas para deletar Métricas primeiro
       const { data: campaigns } = await supabase
         .from('campaigns')
         .select('id')
@@ -157,20 +165,16 @@ export const clientService = {
       
       if (campaigns && campaigns.length > 0) {
         const campaignIds = campaigns.map(c => c.id);
-        // Deletar métricas
         await supabase.from('campaign_metrics').delete().in('campaign_id', campaignIds);
-        // Deletar campanhas
         await supabase.from('campaigns').delete().eq('client_id', clientId);
       }
 
-      // 5. Finalmente, deletar o Cliente
       const { error } = await supabase
         .from('clients')
         .delete()
         .eq('id', clientId);
 
       if (error) throw error;
-    
     } catch (error) {
       console.error("Erro durante exclusão em cascata:", error);
       throw error;
@@ -178,11 +182,7 @@ export const clientService = {
   },
 
   // Fetch campaigns for a specific client AND aggregate their metrics filtered by date
-  async getCampaigns(clientId: string, days = 30) {
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - days);
-    const startDateStr = getLocalDateString(startDate);
-
+  async getCampaigns(clientId: string, startDateStr: string, endDateStr: string) {
     // 1. Buscar metadados das campanhas
     const { data: campaigns, error } = await supabase
       .from('campaigns')
@@ -199,7 +199,8 @@ export const clientService = {
       .from('campaign_metrics')
       .select('*')
       .in('campaign_id', campaignIds)
-      .gte('date', startDateStr); // Filtro de Data corrigido
+      .gte('date', startDateStr)
+      .lte('date', endDateStr);
 
     if (metricsError) throw metricsError;
 
@@ -239,7 +240,7 @@ export const clientService = {
   },
 
   // Fetch daily metrics aggregated by date for the charts (Client Level)
-  async getClientMetrics(clientId: string, days = 30) {
+  async getClientMetrics(clientId: string, startDateStr: string, endDateStr: string) {
     const { data: campaigns } = await supabase
       .from('campaigns')
       .select('id')
@@ -248,15 +249,13 @@ export const clientService = {
     if (!campaigns || campaigns.length === 0) return [];
 
     const campaignIds = campaigns.map(c => c.id);
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - days);
-    const startDateStr = getLocalDateString(startDate);
 
     const { data: metrics, error } = await supabase
       .from('campaign_metrics')
       .select('*')
       .in('campaign_id', campaignIds)
       .gte('date', startDateStr)
+      .lte('date', endDateStr)
       .order('date', { ascending: true });
 
     if (error) throw error;
@@ -277,28 +276,4 @@ export const clientService = {
       roas: d.spend > 0 ? Number((d.revenue / d.spend).toFixed(2)) : 0
     }));
   },
-
-  // Fetch daily metrics for a specific campaign (Campaign Level)
-  async getSingleCampaignMetrics(campaignId: string, days = 30) {
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - days);
-    const startDateStr = getLocalDateString(startDate);
-
-    const { data: metrics, error } = await supabase
-      .from('campaign_metrics')
-      .select('*')
-      .eq('campaign_id', campaignId)
-      .gte('date', startDateStr)
-      .order('date', { ascending: true });
-
-    if (error) throw error;
-
-    return (metrics || []).map((m: any) => ({
-      date: m.date,
-      spend: Number(m.spend || 0),
-      revenue: Number(m.revenue || 0),
-      leads: Number(m.leads || 0),
-      roas: Number(m.spend) > 0 ? Number((m.revenue / m.spend).toFixed(2)) : 0
-    })) as DailyMetric[];
-  }
 };
