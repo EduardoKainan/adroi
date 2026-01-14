@@ -19,6 +19,18 @@ export interface Client {
   roi: number;
   last_updated: string;
   created_at?: string;
+  
+  // Metas de Performance (AdRoi Intelligence)
+  target_roas?: number;
+  target_cpa?: number;
+  budget_limit?: number;
+}
+
+export interface Insight {
+  type: 'critical' | 'opportunity' | 'warning' | 'info';
+  title: string;
+  description: string;
+  recommendation: string;
 }
 
 export interface Campaign {

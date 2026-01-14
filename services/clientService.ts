@@ -83,17 +83,24 @@ export const clientService = {
     }
   },
 
-  // Create a new client
+  // Create a new client with Goals
   async createClient(clientData: Partial<Client>) {
     const payload = {
       name: clientData.name,
       company: clientData.company,
       email: clientData.email,
       ad_account_id: clientData.ad_account_id,
+      // Novos campos de meta
+      target_roas: clientData.target_roas,
+      target_cpa: clientData.target_cpa,
+      budget_limit: clientData.budget_limit,
       status: 'active' as const,
       created_at: new Date().toISOString(),
       last_updated: new Date().toISOString()
     };
+
+    // Clean undefined
+    Object.keys(payload).forEach(key => (payload as any)[key] === undefined && delete (payload as any)[key]);
 
     try {
       const { data, error } = await supabase
@@ -120,13 +127,17 @@ export const clientService = {
     }
   },
 
-  // Update Client Info (Name, Company, Email, AdAccount)
+  // Update Client Info (Name, Company, Email, AdAccount, Goals)
   async updateClient(clientId: string, updates: Partial<Client>) {
     const payload = {
       name: updates.name,
       company: updates.company,
       email: updates.email,
       ad_account_id: updates.ad_account_id,
+      // Novos campos de meta
+      target_roas: updates.target_roas,
+      target_cpa: updates.target_cpa,
+      budget_limit: updates.budget_limit,
       last_updated: new Date().toISOString()
     };
     
