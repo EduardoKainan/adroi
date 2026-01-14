@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { clientService } from '../services/clientService';
 import { dealService } from '../services/dealService';
-import { Loader2, CheckCircle2, ShoppingBag, Calendar, DollarSign, Send } from 'lucide-react';
+import { commercialService } from '../services/commercialService'; // Novo service
+import { Loader2, CheckCircle2, ShoppingBag, Calendar, DollarSign, Send, Users, FileText, ArrowLeft, Briefcase } from 'lucide-react';
 
 interface PublicReportFormProps {
   clientId: string;
@@ -16,18 +17,24 @@ const getTodayLocal = () => {
     return `${year}-${month}-${day}`;
 };
 
+type FormMode = 'MENU' | 'MEETING' | 'PROPOSAL' | 'SALE';
+
 export const PublicReportForm: React.FC<PublicReportFormProps> = ({ clientId }) => {
   const [clientInfo, setClientInfo] = useState<any>(null);
   const [loadingInfo, setLoadingInfo] = useState(true);
+  const [mode, setMode] = useState<FormMode>('MENU');
+  
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
 
+  // Form State Unificado
   const [formData, setFormData] = useState({
     date: getTodayLocal(),
-    description: '',
+    description: '', // Nome do Prospect ou Produto
     quantity: 1,
-    unit_value: ''
+    unit_value: '',
+    notes: '' // Para observações rápidas
   });
 
   useEffect(() => {
@@ -36,6 +43,10 @@ export const PublicReportForm: React.FC<PublicReportFormProps> = ({ clientId }) 
         const info = await clientService.getClientPublicInfo(clientId);
         if (info) {
           setClientInfo(info);
+          // Se o CRM não estiver ativado, vai direto para a tela de Venda (comportamento antigo)
+          if (!info.crm_enabled) {
+             setMode('SALE');
+          }
         } else {
           setError('Cliente não encontrado ou link inválido.');
         }
@@ -52,27 +63,55 @@ export const PublicReportForm: React.FC<PublicReportFormProps> = ({ clientId }) 
     e.preventDefault();
     setSubmitting(true);
     try {
-      await dealService.createDeal({
-        client_id: clientId,
-        date: formData.date,
-        description: formData.description,
-        quantity: Number(formData.quantity),
-        unit_value: Number(formData.unit_value)
-      });
+      if (mode === 'SALE') {
+        // Venda (mantém lógica antiga de Deal para dashboards financeiros)
+        await dealService.createDeal({
+          client_id: clientId,
+          date: formData.date,
+          description: formData.description,
+          quantity: Number(formData.quantity),
+          unit_value: Number(formData.unit_value)
+        });
+      } else if (mode === 'MEETING') {
+        // Reunião
+        await commercialService.addActivity({
+            client_id: clientId,
+            type: 'meeting',
+            date: formData.date,
+            prospect_name: formData.description, // Reusa o campo description como nome do prospect
+            notes: formData.notes
+        });
+      } else if (mode === 'PROPOSAL') {
+        // Proposta
+        await commercialService.addActivity({
+            client_id: clientId,
+            type: 'proposal',
+            date: formData.date,
+            prospect_name: formData.description,
+            value: Number(formData.unit_value),
+            notes: formData.notes
+        });
+      }
+
       setSuccess(true);
-      setFormData(prev => ({ ...prev, description: '', quantity: 1, unit_value: '' }));
+      // Reset
+      setFormData({ date: getTodayLocal(), description: '', quantity: 1, unit_value: '', notes: '' });
       
-      // Reset success message after 3 seconds
-      setTimeout(() => setSuccess(false), 3000);
+      // Reset success message after 3 seconds and go back to menu if applicable
+      setTimeout(() => {
+          setSuccess(false);
+          if (clientInfo?.crm_enabled) {
+              setMode('MENU');
+          }
+      }, 3000);
+
     } catch (err) {
       console.error(err);
-      alert('Erro ao enviar relatório. Tente novamente.');
+      alert('Erro ao salvar. Verifique se o sistema foi atualizado corretamente.');
     } finally {
       setSubmitting(false);
     }
   };
-
-  const total = Number(formData.quantity) * Number(formData.unit_value || 0);
 
   if (loadingInfo) {
     return (
@@ -93,16 +132,94 @@ export const PublicReportForm: React.FC<PublicReportFormProps> = ({ clientId }) 
     );
   }
 
-  return (
-    <div className="min-h-screen bg-slate-50 py-10 px-4">
-      <div className="max-w-md mx-auto">
-        {/* Header */}
-        <div className="text-center mb-8">
-            <div className="w-12 h-12 bg-indigo-600 rounded-xl flex items-center justify-center font-bold text-white shadow-lg mx-auto mb-4">
-                AR
+  // --- MODO MENU (Para clientes com CRM Ativo) ---
+  if (mode === 'MENU') {
+      return (
+        <div className="min-h-screen bg-slate-50 py-10 px-4 flex flex-col items-center">
+             <div className="text-center mb-8 animate-in fade-in slide-in-from-bottom-4">
+                <div className="w-12 h-12 bg-indigo-600 rounded-xl flex items-center justify-center font-bold text-white shadow-lg mx-auto mb-4">
+                    AR
+                </div>
+                <h1 className="text-2xl font-bold text-slate-800">Olá, {clientInfo.name.split(' ')[0]}</h1>
+                <p className="text-slate-500 mt-1">O que aconteceu hoje na <span className="font-semibold text-indigo-600">{clientInfo.company}</span>?</p>
             </div>
-            <h1 className="text-2xl font-bold text-slate-800">Reportar Venda</h1>
-            <p className="text-slate-500 mt-1">Portal do Cliente: <span className="font-semibold text-indigo-600">{clientInfo.company}</span></p>
+
+            <div className="w-full max-w-sm space-y-4 animate-in fade-in slide-in-from-bottom-8 delay-100">
+                <button 
+                  onClick={() => setMode('MEETING')}
+                  className="w-full bg-white p-6 rounded-2xl shadow-sm border border-slate-200 hover:border-blue-400 hover:shadow-md transition-all flex items-center gap-4 group"
+                >
+                    <div className="w-12 h-12 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+                        <Users size={24} />
+                    </div>
+                    <div className="text-left">
+                        <h3 className="font-bold text-slate-800 text-lg">Nova Reunião</h3>
+                        <p className="text-sm text-slate-400">Prospect apareceu ou agendou</p>
+                    </div>
+                </button>
+
+                <button 
+                  onClick={() => setMode('PROPOSAL')}
+                  className="w-full bg-white p-6 rounded-2xl shadow-sm border border-slate-200 hover:border-purple-400 hover:shadow-md transition-all flex items-center gap-4 group"
+                >
+                    <div className="w-12 h-12 rounded-full bg-purple-50 text-purple-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+                        <FileText size={24} />
+                    </div>
+                    <div className="text-left">
+                        <h3 className="font-bold text-slate-800 text-lg">Proposta Enviada</h3>
+                        <p className="text-sm text-slate-400">Orçamento entregue ao cliente</p>
+                    </div>
+                </button>
+
+                <button 
+                  onClick={() => setMode('SALE')}
+                  className="w-full bg-white p-6 rounded-2xl shadow-sm border border-slate-200 hover:border-emerald-400 hover:shadow-md transition-all flex items-center gap-4 group"
+                >
+                    <div className="w-12 h-12 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+                        <Briefcase size={24} />
+                    </div>
+                    <div className="text-left">
+                        <h3 className="font-bold text-slate-800 text-lg">Venda Fechada</h3>
+                        <p className="text-sm text-slate-400">Contrato assinado / pgto feito</p>
+                    </div>
+                </button>
+            </div>
+             
+             <p className="text-center text-xs text-slate-400 mt-12 opacity-60">
+                AdRoi Intelligence
+            </p>
+        </div>
+      );
+  }
+
+  // --- MODO FORMULÁRIO (Reunião, Proposta, Venda) ---
+  const getTitle = () => {
+      if (mode === 'MEETING') return { title: 'Registrar Reunião', icon: <Users size={20} />, color: 'text-blue-600', bg: 'bg-blue-600' };
+      if (mode === 'PROPOSAL') return { title: 'Registrar Proposta', icon: <FileText size={20} />, color: 'text-purple-600', bg: 'bg-purple-600' };
+      return { title: 'Registrar Venda', icon: <DollarSign size={20} />, color: 'text-emerald-600', bg: 'bg-indigo-600' };
+  };
+
+  const info = getTitle();
+  const total = Number(formData.quantity) * Number(formData.unit_value || 0);
+
+  return (
+    <div className="min-h-screen bg-slate-50 py-6 px-4">
+      <div className="max-w-md mx-auto">
+        {/* Nav Back */}
+        {clientInfo.crm_enabled && (
+            <button 
+                onClick={() => setMode('MENU')}
+                className="mb-6 text-slate-500 hover:text-slate-800 flex items-center gap-1 text-sm font-medium transition-colors"
+            >
+                <ArrowLeft size={16} /> Voltar ao menu
+            </button>
+        )}
+
+        <div className="text-center mb-6">
+            <h1 className="text-2xl font-bold text-slate-800 flex items-center justify-center gap-2">
+               <span className={`${info.color} bg-white p-2 rounded-lg shadow-sm`}>{info.icon}</span>
+               {info.title}
+            </h1>
         </div>
 
         {/* Form Card */}
@@ -112,95 +229,105 @@ export const PublicReportForm: React.FC<PublicReportFormProps> = ({ clientId }) 
                    <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4 text-green-600">
                        <CheckCircle2 size={32} />
                    </div>
-                   <h2 className="text-xl font-bold text-slate-800">Sucesso!</h2>
-                   <p className="text-slate-500 mt-2">Venda registrada no sistema.</p>
-                   <button 
-                     onClick={() => setSuccess(false)}
-                     className="mt-6 px-6 py-2 bg-slate-100 text-slate-700 font-bold rounded-lg hover:bg-slate-200 transition-colors"
-                   >
-                       Registrar Nova Venda
-                   </button>
+                   <h2 className="text-xl font-bold text-slate-800">Registrado!</h2>
+                   <p className="text-slate-500 mt-2">Informação salva com sucesso.</p>
+                   {!clientInfo.crm_enabled && (
+                       <button 
+                         onClick={() => setSuccess(false)}
+                         className="mt-6 px-6 py-2 bg-slate-100 text-slate-700 font-bold rounded-lg hover:bg-slate-200 transition-colors"
+                       >
+                           Registrar Novo
+                       </button>
+                   )}
                </div>
            ) : (
              <form onSubmit={handleSubmit} className="p-6 md:p-8 space-y-6">
+                
+                {/* Campo 1: Nome do Prospect / Descrição */}
                 <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-2">O que foi vendido?</label>
+                    <label className="block text-sm font-bold text-slate-700 mb-2">
+                        {mode === 'SALE' ? 'O que foi vendido?' : 'Nome do Cliente/Prospect'}
+                    </label>
                     <div className="relative">
                         <ShoppingBag className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                         <input 
                             required
                             type="text" 
                             className="w-full pl-10 pr-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
-                            placeholder="Ex: Serviço de Consultoria"
+                            placeholder={mode === 'SALE' ? "Ex: Consultoria" : "Ex: Dr. João da Silva"}
                             value={formData.description}
                             onChange={e => setFormData({...formData, description: e.target.value})}
                         />
                     </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                    <div>
-                        <label className="block text-sm font-bold text-slate-700 mb-2">Data</label>
+                {/* Data */}
+                <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-2">Data</label>
+                    <div className="relative">
+                        <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                        <input 
+                            required
+                            type="date" 
+                            className="w-full pl-10 pr-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
+                            value={formData.date}
+                            onChange={e => setFormData({...formData, date: e.target.value})}
+                        />
+                    </div>
+                </div>
+
+                {/* Campos Financeiros (Apenas para SALE e PROPOSAL) */}
+                {(mode === 'SALE' || mode === 'PROPOSAL') && (
+                    <div className="animate-in fade-in slide-in-from-top-2">
+                        <label className="block text-sm font-bold text-slate-700 mb-2">Valor Estimado (R$)</label>
                         <div className="relative">
-                            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                            <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                             <input 
                                 required
-                                type="date" 
-                                className="w-full pl-10 pr-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
-                                value={formData.date}
-                                onChange={e => setFormData({...formData, date: e.target.value})}
+                                type="number" 
+                                step="0.01"
+                                className="w-full pl-10 pr-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all text-lg font-medium"
+                                placeholder="0,00"
+                                value={formData.unit_value}
+                                onChange={e => setFormData({...formData, unit_value: e.target.value})}
                             />
                         </div>
                     </div>
-                    <div>
-                        <label className="block text-sm font-bold text-slate-700 mb-2">Qtd.</label>
-                        <input 
-                            required
-                            type="number" 
-                            min="1"
-                            className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-center"
-                            value={formData.quantity}
-                            onChange={e => setFormData({...formData, quantity: Number(e.target.value)})}
+                )}
+                
+                {/* Notas (Apenas Reunião) */}
+                {mode === 'MEETING' && (
+                     <div className="animate-in fade-in slide-in-from-top-2">
+                        <label className="block text-sm font-bold text-slate-700 mb-2">Observação (Opcional)</label>
+                        <textarea 
+                            className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
+                            rows={2}
+                            placeholder="Ex: Cliente interessado em divórcio..."
+                            value={formData.notes}
+                            onChange={e => setFormData({...formData, notes: e.target.value})}
                         />
-                    </div>
-                </div>
+                     </div>
+                )}
 
-                <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-2">Valor Unitário (R$)</label>
-                    <div className="relative">
-                        <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                        <input 
-                            required
-                            type="number" 
-                            step="0.01"
-                            className="w-full pl-10 pr-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all text-lg font-medium"
-                            placeholder="0,00"
-                            value={formData.unit_value}
-                            onChange={e => setFormData({...formData, unit_value: e.target.value})}
-                        />
+                {/* Resumo Total (Apenas Sale com Qtd) */}
+                {mode === 'SALE' && formData.unit_value && (
+                    <div className="bg-indigo-50 p-4 rounded-xl flex justify-between items-center border border-indigo-100">
+                        <span className="text-indigo-800 font-medium">Total</span>
+                        <span className="text-xl font-bold text-indigo-700">R$ {total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                     </div>
-                </div>
-
-                <div className="bg-indigo-50 p-4 rounded-xl flex justify-between items-center border border-indigo-100">
-                    <span className="text-indigo-800 font-medium">Total da Venda</span>
-                    <span className="text-xl font-bold text-indigo-700">R$ {total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                </div>
+                )}
 
                 <button 
                     type="submit" 
                     disabled={submitting}
-                    className="w-full py-4 bg-indigo-600 rounded-xl text-white font-bold text-lg hover:bg-indigo-700 transition-all transform hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-indigo-200 flex items-center justify-center gap-2 disabled:opacity-70 disabled:transform-none"
+                    className={`w-full py-4 ${info.bg} rounded-xl text-white font-bold text-lg hover:opacity-90 transition-all transform hover:scale-[1.02] active:scale-[0.98] shadow-lg flex items-center justify-center gap-2 disabled:opacity-70 disabled:transform-none`}
                 >
                     {submitting ? <Loader2 className="animate-spin" /> : <Send size={20} />}
-                    Confirmar Venda
+                    Confirmar
                 </button>
              </form>
            )}
         </div>
-        
-        <p className="text-center text-xs text-slate-400 mt-8">
-            AdRoi Intelligence &copy; {new Date().getFullYear()} <br/> Plataforma de Performance
-        </p>
       </div>
     </div>
   );

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Save, Loader2, Target, DollarSign, Wallet } from 'lucide-react';
+import { X, Save, Loader2, Target, DollarSign, Wallet, Briefcase } from 'lucide-react';
 import { clientService } from '../services/clientService';
 import { Client } from '../types';
 
@@ -7,7 +7,7 @@ interface NewClientModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
-  clientToEdit?: Client | null; // Novo prop para suportar edição
+  clientToEdit?: Client | null;
 }
 
 export const NewClientModal: React.FC<NewClientModalProps> = ({ isOpen, onClose, onSuccess, clientToEdit }) => {
@@ -19,10 +19,10 @@ export const NewClientModal: React.FC<NewClientModalProps> = ({ isOpen, onClose,
     ad_account_id: '',
     target_roas: '',
     target_cpa: '',
-    budget_limit: ''
+    budget_limit: '',
+    crm_enabled: false // Novo campo
   });
 
-  // Efeito para preencher o formulário quando entrar em modo de edição
   useEffect(() => {
     if (isOpen) {
       if (clientToEdit) {
@@ -33,11 +33,15 @@ export const NewClientModal: React.FC<NewClientModalProps> = ({ isOpen, onClose,
           ad_account_id: clientToEdit.ad_account_id || '',
           target_roas: clientToEdit.target_roas?.toString() || '',
           target_cpa: clientToEdit.target_cpa?.toString() || '',
-          budget_limit: clientToEdit.budget_limit?.toString() || ''
+          budget_limit: clientToEdit.budget_limit?.toString() || '',
+          crm_enabled: clientToEdit.crm_enabled || false
         });
       } else {
-        // Reset se for criação
-        setFormData({ name: '', company: '', email: '', ad_account_id: '', target_roas: '', target_cpa: '', budget_limit: '' });
+        setFormData({ 
+          name: '', company: '', email: '', ad_account_id: '', 
+          target_roas: '', target_cpa: '', budget_limit: '',
+          crm_enabled: false
+        });
       }
     }
   }, [isOpen, clientToEdit]);
@@ -56,16 +60,17 @@ export const NewClientModal: React.FC<NewClientModalProps> = ({ isOpen, onClose,
       };
 
       if (clientToEdit) {
-        // Modo Edição
         await clientService.updateClient(clientToEdit.id, payload);
       } else {
-        // Modo Criação
         await clientService.createClient(payload);
       }
       
       onSuccess();
       onClose();
-      if (!clientToEdit) setFormData({ name: '', company: '', email: '', ad_account_id: '', target_roas: '', target_cpa: '', budget_limit: '' });
+      if (!clientToEdit) setFormData({ 
+        name: '', company: '', email: '', ad_account_id: '', 
+        target_roas: '', target_cpa: '', budget_limit: '', crm_enabled: false
+      });
       
     } catch (error: any) {
       console.error('Error saving client:', error);
@@ -79,7 +84,7 @@ export const NewClientModal: React.FC<NewClientModalProps> = ({ isOpen, onClose,
       }
 
       if (message.includes('column') && message.includes('does not exist')) {
-        message = `Erro de Banco de Dados: Colunas de meta ausentes. Por favor, adicione 'target_roas', 'target_cpa' e 'budget_limit' na tabela 'clients'.`;
+        message = `Erro de Banco de Dados: Colunas novas ausentes (target_roas ou crm_enabled).`;
       }
 
       alert(`Erro ao ${clientToEdit ? 'atualizar' : 'criar'} cliente: ${message}`);
@@ -203,7 +208,30 @@ export const NewClientModal: React.FC<NewClientModalProps> = ({ isOpen, onClose,
                   </div>
                </div>
             </div>
-            <p className="text-[10px] text-slate-400">Estes parâmetros serão usados pela Inteligência Artificial para gerar alertas de anomalias e oportunidades.</p>
+            <p className="text-[10px] text-slate-400">Estes parâmetros serão usados pela Inteligência Artificial para gerar alertas.</p>
+          </div>
+
+          {/* CRM LITE TOGGLE */}
+          <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
+             <div className="flex items-start gap-2 max-w-[70%]">
+                <div className="p-2 bg-purple-50 rounded-lg text-purple-600 mt-0.5">
+                   <Briefcase size={16} />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-slate-800">Ativar CRM Lite</h4>
+                  <p className="text-xs text-slate-500">Para advogados e negócios locais. Habilita o rastreamento de Reuniões e Propostas no link público.</p>
+                </div>
+             </div>
+             
+             <label className="relative inline-flex items-center cursor-pointer">
+               <input 
+                  type="checkbox" 
+                  className="sr-only peer" 
+                  checked={formData.crm_enabled}
+                  onChange={e => setFormData({...formData, crm_enabled: e.target.checked})}
+               />
+               <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
+             </label>
           </div>
 
           <div className="pt-4 flex gap-3">

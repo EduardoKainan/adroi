@@ -24,6 +24,9 @@ export interface Client {
   target_roas?: number;
   target_cpa?: number;
   budget_limit?: number;
+
+  // CRM Lite Feature Flag
+  crm_enabled?: boolean;
 }
 
 export interface Insight {
@@ -32,6 +35,17 @@ export interface Insight {
   title: string;
   description: string;
   recommendation: string;
+  created_at?: string;
+}
+
+export interface CommercialActivity {
+  id: string;
+  client_id: string;
+  type: 'meeting' | 'proposal';
+  date: string;
+  prospect_name?: string;
+  value?: number;
+  notes?: string;
   created_at?: string;
 }
 

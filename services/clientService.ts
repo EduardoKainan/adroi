@@ -11,10 +11,11 @@ export const getLocalDateString = (date: Date): string => {
 
 export const clientService = {
   // Busca pública apenas para validar o nome da empresa no formulário externo
+  // Adicionado crm_enabled para renderização condicional do formulário
   async getClientPublicInfo(clientId: string) {
     const { data, error } = await supabase
       .from('clients')
-      .select('id, company, name')
+      .select('id, company, name, crm_enabled')
       .eq('id', clientId)
       .single();
     
@@ -119,6 +120,7 @@ export const clientService = {
       target_roas: clientData.target_roas,
       target_cpa: clientData.target_cpa,
       budget_limit: clientData.budget_limit,
+      crm_enabled: clientData.crm_enabled, // Novo campo
       status: 'active' as const,
       created_at: new Date().toISOString(),
       last_updated: new Date().toISOString()
@@ -163,6 +165,7 @@ export const clientService = {
       target_roas: updates.target_roas,
       target_cpa: updates.target_cpa,
       budget_limit: updates.budget_limit,
+      crm_enabled: updates.crm_enabled, // Novo campo
       last_updated: new Date().toISOString()
     };
     
@@ -193,6 +196,11 @@ export const clientService = {
       await supabase.from('tasks').delete().eq('client_id', clientId);
       await supabase.from('deals').delete().eq('client_id', clientId);
       await supabase.from('contracts').delete().eq('client_id', clientId);
+      
+      // Tentativa de limpar commercial_activities se existir
+      try {
+        await supabase.from('commercial_activities').delete().eq('client_id', clientId);
+      } catch (e) { /* ignore se tabela nao existir */ }
 
       const { data: campaigns } = await supabase
         .from('campaigns')
