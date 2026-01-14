@@ -3,12 +3,33 @@ import { Sidebar } from './components/Sidebar';
 import { Dashboard } from './components/Dashboard';
 import { ClientView } from './components/ClientView';
 import { ProfessionalDashboard } from './components/ProfessionalDashboard';
+import { PublicReportForm } from './components/PublicReportForm'; // Importar novo componente
 import { Client, ViewState, Project, Task, Goal, TaskCategory } from './types';
 import { taskService } from './services/taskService';
-import { clientService, getLocalDateString } from './services/clientService'; // Necessário para listar clientes na modal de tarefas
+import { clientService, getLocalDateString } from './services/clientService'; 
 import { Loader2 } from 'lucide-react';
 
 const App: React.FC = () => {
+  // --- LÓGICA DE ROTEAMENTO MANUAL PARA LINK PÚBLICO ---
+  const [publicClientId, setPublicClientId] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Verifica se a URL é do tipo /report/:clientId
+    const path = window.location.pathname;
+    if (path.startsWith('/report/')) {
+        const id = path.split('/report/')[1];
+        if (id) {
+            setPublicClientId(id);
+        }
+    }
+  }, []);
+
+  // Se for uma rota pública, renderiza APENAS o formulário
+  if (publicClientId) {
+    return <PublicReportForm clientId={publicClientId} />;
+  }
+  // -----------------------------------------------------
+
   const [currentView, setCurrentView] = useState<ViewState>('DASHBOARD');
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   
@@ -16,7 +37,7 @@ const App: React.FC = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
-  const [clients, setClients] = useState<Client[]>([]); // Clientes para o dropdown de tarefas
+  const [clients, setClients] = useState<Client[]>([]); 
   const [loadingTasks, setLoadingTasks] = useState(false);
 
   const handleClientSelect = (client: Client) => {
@@ -41,12 +62,10 @@ const App: React.FC = () => {
   const fetchTaskData = async () => {
     setLoadingTasks(true);
     try {
-      // Calcular range padrão (30 dias) para buscar clientes
       const today = new Date();
       const start = new Date();
       start.setDate(today.getDate() - 30);
 
-      // Carrega tarefas, projetos, metas E clientes (para poder vincular na criação)
       const [fetchedTasks, fetchedProjects, fetchedGoals, fetchedClients] = await Promise.all([
         taskService.getTasks(),
         taskService.getProjects(),
@@ -79,7 +98,7 @@ const App: React.FC = () => {
   };
 
   const handleCreateTask = async () => {
-    await fetchTaskData(); // Recarrega tudo para pegar a nova tarefa com os joins corretos
+    await fetchTaskData(); 
   };
   
   const handleUpdateTask = async () => {
@@ -87,7 +106,7 @@ const App: React.FC = () => {
   };
   
   const handleCreateProject = async () => {
-    await fetchTaskData(); // Recarrega para incluir o novo projeto
+    await fetchTaskData(); 
   };
 
   const handleToggleTask = async (taskId: string, completed: boolean) => {
@@ -118,17 +137,16 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
-      {/* Navigation Header (formerly Sidebar) */}
+      {/* Navigation Header */}
       <Sidebar currentView={currentView} onChangeView={handleViewChange} />
       
-      {/* Main Content Area - Added pt-20 to clear fixed header */}
+      {/* Main Content Area */}
       <main className="flex-1 p-8 pt-24 overflow-y-auto w-full max-w-[1600px] mx-auto">
         <header className="mb-6 flex justify-between items-center">
            <div className="text-sm text-slate-500 font-medium">
              {new Date().toLocaleDateString('pt-BR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
            </div>
            
-           {/* Breadcrumb / Context indicator could go here */}
            <div className="text-sm text-slate-400">
              AdRoi Workspace / <span className="text-slate-600 font-semibold">{currentView === 'DASHBOARD' ? 'Visão Geral' : currentView}</span>
            </div>

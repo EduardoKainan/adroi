@@ -4,7 +4,7 @@ import { clientService, getLocalDateString } from '../services/clientService';
 import { contractService } from '../services/contractService';
 import { dealService } from '../services/dealService';
 import { aiAnalysisService } from '../services/aiAnalysisService';
-import { DollarSign, Target, TrendingUp, Calendar, Download, Loader2, Users, ShoppingBag, Plus, Copy, Check, BarChart, ChevronLeft, ChevronDown, Sparkles } from 'lucide-react';
+import { DollarSign, Target, TrendingUp, Calendar, Download, Loader2, Users, ShoppingBag, Plus, Copy, Check, BarChart, ChevronLeft, ChevronDown, Sparkles, PieChart, Link, ExternalLink } from 'lucide-react';
 import { NewSaleModal } from './NewSaleModal';
 import { InsightsFeed } from './InsightsFeed';
 // Importação do ECharts
@@ -117,6 +117,7 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, onBack }) => {
   const [deals, setDeals] = useState<Deal[]>([]);
   const [isSaleModalOpen, setIsSaleModalOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
   const [activeChart, setActiveChart] = useState<'finance' | 'acquisition' | 'funnel'>('finance');
   
   // AI Insights State
@@ -170,12 +171,22 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, onBack }) => {
   }, []);
 
   const calculateFilteredStats = () => {
-     const totalSpend = campaigns.reduce((acc, c) => acc + (c.spend || 0), 0);
-     const totalRevenue = campaigns.reduce((acc, c) => acc + (c.revenue || 0), 0);
+     // 1. Ads Metrics
+     const adSpend = campaigns.reduce((acc, c) => acc + (c.spend || 0), 0);
+     const adRevenue = campaigns.reduce((acc, c) => acc + (c.revenue || 0), 0);
      const totalLeads = campaigns.reduce((acc, c) => acc + (c.leads || 0), 0);
-     const roas = totalSpend > 0 ? totalRevenue / totalSpend : 0;
-     const roi = totalSpend > 0 ? (totalRevenue - totalSpend) / totalSpend : 0;
-     return { totalSpend, totalRevenue, totalLeads, roas, roi };
+
+     // 2. Offline Metrics (Filtered by date)
+     const offlineRevenue = deals
+        .filter(d => d.date >= dateRange.start && d.date <= dateRange.end)
+        .reduce((acc, d) => acc + (d.total_value || 0), 0);
+
+     // 3. Blended Totals
+     const totalRevenue = adRevenue + offlineRevenue;
+     const roas = adSpend > 0 ? totalRevenue / adSpend : 0;
+     const roi = adSpend > 0 ? (totalRevenue - adSpend) / adSpend : 0;
+
+     return { totalSpend: adSpend, totalRevenue, adRevenue, offlineRevenue, totalLeads, roas, roi };
   };
 
   const filteredStats = calculateFilteredStats();
@@ -194,7 +205,7 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, onBack }) => {
         clientService.getCampaigns(currentClient.id, startDateStr, endDateStr),
         clientService.getClientMetrics(currentClient.id, startDateStr, endDateStr),
         contractService.getClientContract(currentClient.id),
-        dealService.getDeals(currentClient.id),
+        dealService.getDeals(currentClient.id), // Retorna todos, filtramos localmente para a lista lateral
         aiAnalysisService.getSavedInsights(currentClient.id)
       ]);
       
@@ -213,13 +224,13 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, onBack }) => {
   };
 
   const handleSaleAdded = async () => {
+    // Recarrega apenas as deals para atualizar a lista e o cálculo
     const dealsData = await dealService.getDeals(currentClient.id);
     setDeals(dealsData);
   };
 
   // --- Função para chamar IA e Salvar ---
   const handleGenerateInsights = async () => {
-     // Se já houver insights mas estiverem ocultos, apenas mostre
      if (insights.length > 0 && !showInsights) {
        setShowInsights(true);
        return;
@@ -228,26 +239,24 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, onBack }) => {
      setLoadingInsights(true);
      setShowInsights(true);
      
-     // Atualiza o client com as métricas calculadas no frontend para enviar ao AI
+     // Atualiza o client com as métricas MISTAS (Blended) para enviar ao AI
      const clientWithCurrentStats: Client = {
         ...currentClient,
         total_spend: filteredStats.totalSpend,
-        total_revenue: filteredStats.totalRevenue,
+        total_revenue: filteredStats.totalRevenue, // Blended
         total_leads: filteredStats.totalLeads,
-        roas: filteredStats.roas
+        roas: filteredStats.roas // Blended
      };
 
      try {
        const generatedInsights = await aiAnalysisService.generateInsights(clientWithCurrentStats, campaigns, chartData);
        
-       // Salva automaticamente no banco se tiver retorno válido
        if (generatedInsights.length > 0 && !generatedInsights[0].title.includes("Indisponível")) {
            await aiAnalysisService.saveInsights(currentClient.id, generatedInsights);
-           // Recarrega do banco para ter os IDs corretos para exclusão
            const saved = await aiAnalysisService.getSavedInsights(currentClient.id);
            setInsights(saved);
        } else {
-           setInsights(generatedInsights); // Mostra o erro ou insight temporário
+           setInsights(generatedInsights);
        }
      } catch (e) {
        console.error("Erro ao gerar insights", e);
@@ -290,10 +299,22 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, onBack }) => {
       });
     }
 
-    text += `Total Investido: R$ ${filteredStats.totalSpend?.toLocaleString('pt-BR')}`;
+    text += `\n---------\n`;
+    text += `💰 Resumo Financeiro\n`;
+    text += `Investimento: R$ ${filteredStats.totalSpend?.toLocaleString('pt-BR')}\n`;
+    text += `Receita (Ads + Manual): R$ ${filteredStats.totalRevenue?.toLocaleString('pt-BR')}\n`;
+    text += `ROAS Misto: ${filteredStats.roas.toFixed(2)}x`;
+
     navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleCopyPublicLink = () => {
+    const url = `${window.location.origin}/report/${currentClient.id}`;
+    navigator.clipboard.writeText(url);
+    setLinkCopied(true);
+    setTimeout(() => setLinkCopied(false), 2000);
   };
 
   const daysDiff = dateRange.start && dateRange.end 
@@ -303,8 +324,8 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, onBack }) => {
   const kpis = [
     { label: 'Leads', value: filteredStats.totalLeads.toLocaleString('pt-BR'), sub: `${daysDiff}d`, trend: 'up', icon: Users, color: 'text-orange-500' },
     { label: 'Investido', value: `R$ ${filteredStats.totalSpend.toLocaleString('pt-BR')}`, sub: `${daysDiff}d`, trend: 'up', icon: DollarSign, color: 'text-blue-500' },
-    { label: 'Receita', value: `R$ ${filteredStats.totalRevenue.toLocaleString('pt-BR')}`, sub: `${daysDiff}d`, trend: 'up', icon: Target, color: 'text-green-500' },
-    { label: 'ROAS', value: `${(filteredStats.roas || 0).toFixed(2)}x`, sub: 'Meta 4x', trend: (filteredStats.roas || 0) > 4 ? 'up' : 'down', icon: TrendingUp, color: 'text-purple-500' },
+    { label: 'Receita Total', value: `R$ ${filteredStats.totalRevenue.toLocaleString('pt-BR')}`, sub: `Ads: ${(filteredStats.adRevenue/1000).toFixed(1)}k | Manual: ${(filteredStats.offlineRevenue/1000).toFixed(1)}k`, trend: 'up', icon: Target, color: 'text-green-500' },
+    { label: 'ROAS Misto', value: `${(filteredStats.roas || 0).toFixed(2)}x`, sub: 'Meta 4x', trend: (filteredStats.roas || 0) > 4 ? 'up' : 'down', icon: PieChart, color: 'text-purple-500' },
     { label: 'ROI Real', value: `${((filteredStats.roi || 0) * 100).toFixed(1)}%`, sub: 'Final', trend: 'up', icon: BarChart, color: 'text-emerald-500' },
   ];
 
@@ -312,9 +333,27 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, onBack }) => {
 
   // 1. Finance Chart Option (Area with Gradient)
   const getFinanceOption = useMemo(() => {
+    // Preparar dados do gráfico
+    // Precisamos mesclar as vendas manuais com os dados diários do gráfico
+    
+    // Mapa de receitas manuais por data
+    const offlineRevenueByDate: Record<string, number> = {};
+    deals.filter(d => d.date >= dateRange.start && d.date <= dateRange.end).forEach(d => {
+        if (!offlineRevenueByDate[d.date]) offlineRevenueByDate[d.date] = 0;
+        offlineRevenueByDate[d.date] += Number(d.total_value);
+    });
+
     const dates = chartData.map(d => d.date.split('-')[2]); // Just days
-    const revenue = chartData.map(d => d.revenue);
+    
+    // Arrays para o gráfico
     const spend = chartData.map(d => d.spend);
+    const adRevenue = chartData.map(d => d.revenue);
+    
+    // Blended Revenue = Ad Revenue + Offline Revenue para aquele dia
+    const blendedRevenue = chartData.map(d => {
+        const offline = offlineRevenueByDate[d.date] || 0;
+        return d.revenue + offline;
+    });
 
     return {
       toolbox: {
@@ -341,7 +380,7 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, onBack }) => {
         }
       },
       legend: { 
-        data: ['Receita', 'Investimento'], 
+        data: ['Receita Total', 'Investimento', 'Receita Ads'], 
         bottom: 0,
         itemGap: 20,
         textStyle: { color: '#64748b' }
@@ -372,7 +411,7 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, onBack }) => {
       ],
       series: [
         {
-          name: 'Receita',
+          name: 'Receita Total',
           type: 'line',
           smooth: true,
           lineStyle: { width: 3, color: '#10b981' },
@@ -385,7 +424,8 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, onBack }) => {
             ])
           },
           emphasis: { focus: 'series' },
-          data: revenue
+          data: blendedRevenue,
+          z: 3
         },
         {
           name: 'Investimento',
@@ -401,11 +441,21 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, onBack }) => {
             ])
           },
           emphasis: { focus: 'series' },
-          data: spend
+          data: spend,
+          z: 2
+        },
+        {
+            name: 'Receita Ads',
+            type: 'line',
+            smooth: true,
+            lineStyle: { width: 1, color: '#94a3b8', type: 'dashed' },
+            showSymbol: false,
+            data: adRevenue,
+            z: 1
         }
       ]
     };
-  }, [chartData]);
+  }, [chartData, deals, dateRange]);
 
   // 2. Acquisition Chart Option (3D Bar + Line)
   const getAcquisitionOption = useMemo(() => {
@@ -811,9 +861,18 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, onBack }) => {
                   <ShoppingBag size={18} className="text-indigo-600" />
                   Vendas Offline
                 </h3>
-                <button onClick={() => setIsSaleModalOpen(true)} className="flex items-center gap-1 text-xs font-bold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition-colors">
-                  <Plus size={14} /> Nova Venda
-                </button>
+                <div className="flex gap-2">
+                  <button 
+                    onClick={handleCopyPublicLink} 
+                    className={`flex items-center gap-1 text-xs font-bold px-3 py-1.5 rounded-lg transition-colors border ${linkCopied ? 'bg-green-50 text-green-700 border-green-200' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'}`}
+                    title="Copiar link para cliente preencher"
+                  >
+                    {linkCopied ? <Check size={14} /> : <Link size={14} />}
+                  </button>
+                  <button onClick={() => setIsSaleModalOpen(true)} className="flex items-center gap-1 text-xs font-bold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition-colors">
+                    <Plus size={14} /> Nova Venda
+                  </button>
+                </div>
              </div>
              
              <div className="flex-1 overflow-y-auto pr-1 max-h-[400px] md:max-h-[550px] custom-scrollbar space-y-3">
@@ -829,8 +888,9 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, onBack }) => {
                      </div>
                   </div>
                 )) : (
-                  <div className="h-full flex flex-col items-center justify-center text-slate-400 text-center italic text-xs border-2 border-dashed border-slate-100 rounded-lg">
-                     <p>Nenhuma venda manual registrada.</p>
+                  <div className="h-full flex flex-col items-center justify-center text-slate-400 text-center italic text-xs border-2 border-dashed border-slate-100 rounded-lg p-6">
+                     <p>Nenhuma venda registrada.</p>
+                     <p className="mt-2 text-[10px] max-w-[150px]">Envie o link para seu cliente registrar vendas automaticamente.</p>
                   </div>
                 )}
              </div>

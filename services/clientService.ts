@@ -10,6 +10,18 @@ export const getLocalDateString = (date: Date): string => {
 };
 
 export const clientService = {
+  // Busca pública apenas para validar o nome da empresa no formulário externo
+  async getClientPublicInfo(clientId: string) {
+    const { data, error } = await supabase
+      .from('clients')
+      .select('id, company, name')
+      .eq('id', clientId)
+      .single();
+    
+    if (error) return null;
+    return data;
+  },
+
   // Fetch all clients with aggregated real-time metrics filtered by date range
   async getClients(startDateStr: string, endDateStr: string) {
     try {
@@ -26,8 +38,9 @@ export const clientService = {
 
       if (!clients || clients.length === 0) return [];
 
-      // 2. Busca todas as campanhas desses clientes para vincular IDs
       const clientIds = clients.map(c => c.id);
+
+      // 2. Busca todas as campanhas para vincular IDs
       const { data: campaigns } = await supabase
         .from('campaigns')
         .select('id, client_id')
@@ -35,7 +48,7 @@ export const clientService = {
 
       const campaignIds = campaigns?.map(c => c.id) || [];
 
-      // 3. Busca métricas acumuladas (leads, spend, revenue) FILTRADAS POR DATA
+      // 3. Busca métricas acumuladas (Ads)
       let metricsData: any[] = [];
       if (campaignIds.length > 0) {
         const { data: metrics, error: metricsError } = await supabase
@@ -50,29 +63,41 @@ export const clientService = {
         }
       }
 
-      // 4. Agrega os dados em memória para garantir consistência no Dashboard
+      // 4. Busca Vendas Manuais (Deals) no período
+      const { data: deals } = await supabase
+        .from('deals')
+        .select('client_id, total_value')
+        .in('client_id', clientIds)
+        .gte('date', startDateStr)
+        .lte('date', endDateStr);
+
+      // 5. Agrega os dados em memória
       const clientsWithMetrics = clients.map(client => {
-        // Encontrar campanhas deste cliente
+        // --- Cálculo Ads ---
         const myCampaigns = campaigns?.filter(c => c.client_id === client.id) || [];
         const myCampaignIds = myCampaigns.map(c => c.id);
-
-        // Filtrar métricas das campanhas deste cliente
         const myMetrics = metricsData.filter(m => myCampaignIds.includes(m.campaign_id));
 
-        // Calcular totais reais baseados no período selecionado
-        const realTotalLeads = myMetrics.reduce((sum, m) => sum + (Number(m.leads) || 0), 0);
-        const realTotalSpend = myMetrics.reduce((sum, m) => sum + (Number(m.spend) || 0), 0);
-        const realTotalRevenue = myMetrics.reduce((sum, m) => sum + (Number(m.revenue) || 0), 0);
+        const adSpend = myMetrics.reduce((sum, m) => sum + (Number(m.spend) || 0), 0);
+        const adRevenue = myMetrics.reduce((sum, m) => sum + (Number(m.revenue) || 0), 0);
+        const totalLeads = myMetrics.reduce((sum, m) => sum + (Number(m.leads) || 0), 0);
+
+        // --- Cálculo Offline (Manual) ---
+        const myDeals = deals?.filter(d => d.client_id === client.id) || [];
+        const offlineRevenue = myDeals.reduce((sum, d) => sum + (Number(d.total_value) || 0), 0);
+
+        // --- Totais Mistos ---
+        const totalRevenue = adRevenue + offlineRevenue;
         
-        // Calcular ROAS real
-        const realRoas = realTotalSpend > 0 ? realTotalRevenue / realTotalSpend : 0;
+        // Calcular ROAS (Blended)
+        const roas = adSpend > 0 ? totalRevenue / adSpend : 0;
 
         return {
           ...client,
-          total_leads: realTotalLeads,      
-          total_spend: realTotalSpend,      
-          total_revenue: realTotalRevenue,  
-          roas: realRoas
+          total_leads: totalLeads,      
+          total_spend: adSpend,      
+          total_revenue: totalRevenue, // Soma Ads + Manual
+          roas: roas
         };
       });
       
