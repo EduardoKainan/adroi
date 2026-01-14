@@ -1,10 +1,11 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { Client, Contract, Campaign, DailyMetric, Deal, Insight } from '../types';
+import { Client, Contract, Campaign, DailyMetric, Deal, Insight, CommercialActivity } from '../types';
 import { clientService, getLocalDateString } from '../services/clientService';
 import { contractService } from '../services/contractService';
 import { dealService } from '../services/dealService';
+import { commercialService } from '../services/commercialService';
 import { aiAnalysisService } from '../services/aiAnalysisService';
-import { DollarSign, Target, TrendingUp, Calendar, Download, Loader2, Users, ShoppingBag, Plus, Copy, Check, BarChart, ChevronLeft, ChevronDown, Sparkles, PieChart, Link, ExternalLink } from 'lucide-react';
+import { DollarSign, Target, TrendingUp, Calendar, Download, Loader2, Users, ShoppingBag, Plus, Copy, Check, BarChart, ChevronLeft, ChevronDown, Sparkles, PieChart, Link, ExternalLink, FileText, Briefcase } from 'lucide-react';
 import { NewSaleModal } from './NewSaleModal';
 import { InsightsFeed } from './InsightsFeed';
 // Importação do ECharts
@@ -114,11 +115,17 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, onBack }) => {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [chartData, setChartData] = useState<DailyMetric[]>([]);
   const [contract, setContract] = useState<Contract | null>(null);
+  
+  // Dados de CRM
   const [deals, setDeals] = useState<Deal[]>([]);
+  const [activities, setActivities] = useState<CommercialActivity[]>([]);
+  
+  // UI State
   const [isSaleModalOpen, setIsSaleModalOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
-  const [activeChart, setActiveChart] = useState<'finance' | 'acquisition' | 'funnel'>('finance');
+  const [activeChart, setActiveChart] = useState<'finance' | 'acquisition' | 'marketing_funnel' | 'commercial_funnel'>('finance');
+  const [crmListTab, setCrmListTab] = useState<'deals' | 'activities'>('deals');
   
   // AI Insights State
   const [insights, setInsights] = useState<Insight[]>([]);
@@ -201,19 +208,32 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, onBack }) => {
       const startDateStr = dateRange.start;
       const endDateStr = dateRange.end;
 
-      const [campData, metricsData, contractData, dealsData, savedInsights] = await Promise.all([
+      const promises: Promise<any>[] = [
         clientService.getCampaigns(currentClient.id, startDateStr, endDateStr),
         clientService.getClientMetrics(currentClient.id, startDateStr, endDateStr),
         contractService.getClientContract(currentClient.id),
         dealService.getDeals(currentClient.id), // Retorna todos, filtramos localmente para a lista lateral
         aiAnalysisService.getSavedInsights(currentClient.id)
-      ]);
+      ];
+
+      // Se CRM Ativo, busca atividades (Reuniões/Propostas)
+      if (currentClient.crm_enabled) {
+          promises.push(commercialService.getActivities(currentClient.id));
+      }
+
+      const results = await Promise.all(promises);
       
-      setCampaigns(campData);
-      setChartData(metricsData);
-      setContract(contractData);
-      setDeals(dealsData);
-      setInsights(savedInsights);
+      setCampaigns(results[0]);
+      setChartData(results[1]);
+      setContract(results[2]);
+      setDeals(results[3]);
+      setInsights(results[4]);
+
+      if (currentClient.crm_enabled && results[5]) {
+          setActivities(results[5]);
+      } else {
+          setActivities([]);
+      }
       
     } catch (error: any) {
       console.error("Failed to load client details:", error);
@@ -305,6 +325,19 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, onBack }) => {
     text += `Receita (Ads + Manual): R$ ${filteredStats.totalRevenue?.toLocaleString('pt-BR')}\n`;
     text += `ROAS Misto: ${filteredStats.roas.toFixed(2)}x`;
 
+    if (currentClient.crm_enabled) {
+        const periodActivities = activities.filter(a => a.date >= dateRange.start && a.date <= dateRange.end);
+        
+        // --- ATUALIZAÇÃO: Cálculo usando 'quantity' ---
+        const meetings = periodActivities.filter(a => a.type === 'meeting').reduce((acc, a) => acc + (a.quantity || 1), 0);
+        const proposals = periodActivities.filter(a => a.type === 'proposal').reduce((acc, a) => acc + (a.quantity || 1), 0);
+        const proposalValue = periodActivities.filter(a => a.type === 'proposal').reduce((acc, p) => acc + (p.value || 0), 0);
+        
+        text += `\n\n🎯 Funil Comercial\n`;
+        text += `- Reuniões Realizadas: ${meetings}\n`;
+        text += `- Propostas Enviadas: ${proposals} (R$ ${proposalValue.toLocaleString('pt-BR')})\n`;
+    }
+
     navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -331,45 +364,28 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, onBack }) => {
 
   // --- ECHARTS CONFIGURATIONS ---
 
-  // 1. Finance Chart Option (Area with Gradient)
+  // 1. Finance Chart
   const getFinanceOption = useMemo(() => {
-    // Preparar dados do gráfico
-    // Precisamos mesclar as vendas manuais com os dados diários do gráfico
-    
-    // Mapa de receitas manuais por data
     const offlineRevenueByDate: Record<string, number> = {};
     deals.filter(d => d.date >= dateRange.start && d.date <= dateRange.end).forEach(d => {
         if (!offlineRevenueByDate[d.date]) offlineRevenueByDate[d.date] = 0;
         offlineRevenueByDate[d.date] += Number(d.total_value);
     });
 
-    const dates = chartData.map(d => d.date.split('-')[2]); // Just days
-    
-    // Arrays para o gráfico
+    const dates = chartData.map(d => d.date.split('-')[2]); 
     const spend = chartData.map(d => d.spend);
     const adRevenue = chartData.map(d => d.revenue);
     
-    // Blended Revenue = Ad Revenue + Offline Revenue para aquele dia
     const blendedRevenue = chartData.map(d => {
         const offline = offlineRevenueByDate[d.date] || 0;
         return d.revenue + offline;
     });
 
     return {
-      toolbox: {
-        feature: {
-          saveAsImage: { show: true, title: 'Salvar' }
-        },
-        right: '2%'
-      },
+      toolbox: { feature: { saveAsImage: { show: true, title: 'Salvar' } }, right: '2%' },
       tooltip: {
         trigger: 'axis',
-        axisPointer: { type: 'cross', label: { backgroundColor: '#6a7985' } },
-        backgroundColor: 'rgba(255, 255, 255, 0.95)',
-        borderRadius: 8,
-        shadowBlur: 10,
-        shadowColor: 'rgba(0,0,0,0.1)',
-        textStyle: { color: '#1e293b' },
+        axisPointer: { type: 'cross' },
         formatter: (params: any) => {
           let res = `<div class="font-bold mb-1 border-b border-slate-100 pb-1 text-slate-700">Dia ${params[0].axisValue}</div>`;
           params.forEach((param: any) => {
@@ -379,201 +395,84 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, onBack }) => {
           return res;
         }
       },
-      legend: { 
-        data: ['Receita Total', 'Investimento', 'Receita Ads'], 
-        bottom: 0,
-        itemGap: 20,
-        textStyle: { color: '#64748b' }
-      },
+      legend: { data: ['Receita Total', 'Investimento', 'Receita Ads'], bottom: 0 },
       grid: { left: '2%', right: '4%', bottom: '12%', top: '10%', containLabel: true },
-      xAxis: [
-        {
-          type: 'category',
-          boundaryGap: false,
-          data: dates,
-          axisLine: { show: false },
-          axisTick: { show: false },
-          axisLabel: { color: '#94a3b8', fontSize: 11, margin: 12 }
-        }
-      ],
-      yAxis: [
-        {
-          type: 'value',
-          axisLine: { show: false },
-          axisTick: { show: false },
-          splitLine: { lineStyle: { color: '#f1f5f9', type: 'dashed' } },
-          axisLabel: {
-             color: '#94a3b8',
-             fontSize: 11,
-             formatter: (value: number) => `R$${value >= 1000 ? (value/1000).toFixed(0) + 'k' : value}`
-          }
-        }
-      ],
+      xAxis: [{ type: 'category', boundaryGap: false, data: dates, axisLine: { show: false }, axisTick: { show: false } }],
+      yAxis: [{ type: 'value', splitLine: { lineStyle: { type: 'dashed' } } }],
       series: [
         {
           name: 'Receita Total',
           type: 'line',
           smooth: true,
           lineStyle: { width: 3, color: '#10b981' },
-          showSymbol: false,
-          areaStyle: {
-            opacity: 0.8,
-            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-              { offset: 0, color: 'rgba(16, 185, 129, 0.25)' },
-              { offset: 1, color: 'rgba(16, 185, 129, 0.02)' }
-            ])
-          },
-          emphasis: { focus: 'series' },
-          data: blendedRevenue,
-          z: 3
+          areaStyle: { opacity: 0.2, color: '#10b981' },
+          data: blendedRevenue
         },
         {
           name: 'Investimento',
           type: 'line',
           smooth: true,
           lineStyle: { width: 3, color: '#3b82f6' },
-          showSymbol: false,
-          areaStyle: {
-            opacity: 0.8,
-            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-              { offset: 0, color: 'rgba(59, 130, 246, 0.25)' },
-              { offset: 1, color: 'rgba(59, 130, 246, 0.02)' }
-            ])
-          },
-          emphasis: { focus: 'series' },
-          data: spend,
-          z: 2
+          areaStyle: { opacity: 0.2, color: '#3b82f6' },
+          data: spend
         },
         {
             name: 'Receita Ads',
             type: 'line',
             smooth: true,
             lineStyle: { width: 1, color: '#94a3b8', type: 'dashed' },
-            showSymbol: false,
-            data: adRevenue,
-            z: 1
+            data: adRevenue
         }
       ]
     };
   }, [chartData, deals, dateRange]);
 
-  // 2. Acquisition Chart Option (3D Bar + Line)
+  // 2. Acquisition Chart
   const getAcquisitionOption = useMemo(() => {
     const dates = chartData.map(d => d.date.split('-')[2]);
     const leads = chartData.map(d => d.leads);
     const cpl = chartData.map(d => d.leads > 0 ? d.spend / d.leads : 0);
-
-    // Gradiente 3D Cilíndrico para as Barras (Esquerda -> Direita)
-    const barGradient = new echarts.graphic.LinearGradient(0, 0, 1, 0, [
-        { offset: 0, color: '#d97706' },   // Sombra Esquerda
-        { offset: 0.5, color: '#fbbf24' }, // Brilho Central (Amber 400)
-        { offset: 1, color: '#b45309' }    // Sombra Direita
-    ]);
+    const barGradient = new echarts.graphic.LinearGradient(0, 0, 1, 0, [{ offset: 0, color: '#d97706' }, { offset: 1, color: '#b45309' }]);
 
     return {
-      toolbox: {
-        feature: {
-          saveAsImage: { show: true, title: 'Salvar' }
-        },
-        right: '2%'
-      },
-      tooltip: {
-        trigger: 'axis',
-        axisPointer: { type: 'shadow' },
-        backgroundColor: 'rgba(255, 255, 255, 0.95)',
-        borderRadius: 8,
-        shadowBlur: 10,
-        shadowColor: 'rgba(0,0,0,0.1)',
-        textStyle: { color: '#1e293b' }
-      },
-      legend: { data: ['Leads', 'CPL'], bottom: 0, textStyle: { color: '#64748b' } },
+      toolbox: { feature: { saveAsImage: { show: true, title: 'Salvar' } }, right: '2%' },
+      tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+      legend: { data: ['Leads', 'CPL'], bottom: 0 },
       grid: { left: '2%', right: '4%', bottom: '12%', top: '15%', containLabel: true },
-      xAxis: [
-        {
-          type: 'category',
-          data: dates,
-          axisLine: { show: false },
-          axisTick: { show: false },
-          axisLabel: { color: '#94a3b8', fontSize: 11, margin: 12 }
-        }
-      ],
+      xAxis: [{ type: 'category', data: dates, axisLine: { show: false }, axisTick: { show: false } }],
       yAxis: [
-        {
-          type: 'value',
-          name: 'Leads',
-          position: 'left',
-          axisLine: { show: false },
-          axisTick: { show: false },
-          splitLine: { lineStyle: { color: '#f1f5f9' } },
-          axisLabel: { color: '#d97706', fontSize: 11 },
-          nameTextStyle: { color: '#d97706', fontWeight: 'bold', align: 'left', padding: [0, 0, 0, -10] }
-        },
-        {
-          type: 'value',
-          name: 'CPL (R$)',
-          position: 'right',
-          axisLine: { show: false },
-          axisTick: { show: false },
-          splitLine: { show: false },
-          axisLabel: { color: '#ef4444', fontSize: 11, formatter: (val: number) => `R$${val.toFixed(0)}` },
-          nameTextStyle: { color: '#ef4444', fontWeight: 'bold', align: 'right', padding: [0, -10, 0, 0] }
-        }
+        { type: 'value', name: 'Leads', position: 'left', axisLine: { show: false }, axisTick: { show: false } },
+        { type: 'value', name: 'CPL (R$)', position: 'right', axisLine: { show: false }, axisTick: { show: false } }
       ],
       series: [
-        {
-          name: 'Leads',
-          type: 'bar',
-          barWidth: '50%',
-          itemStyle: { 
-            color: barGradient, 
-            borderRadius: [4, 4, 0, 0],
-            shadowBlur: 4,
-            shadowColor: 'rgba(0, 0, 0, 0.2)',
-            shadowOffsetY: 2
-          },
-          data: leads
-        },
-        {
-          name: 'CPL',
-          type: 'line',
-          yAxisIndex: 1,
-          smooth: true,
-          itemStyle: { color: '#ef4444' },
-          lineStyle: { 
-             width: 3, 
-             shadowColor: 'rgba(239, 68, 68, 0.3)', 
-             shadowBlur: 8,
-             shadowOffsetY: 4
-          },
-          data: cpl
-        }
+        { name: 'Leads', type: 'bar', barWidth: '50%', itemStyle: { color: barGradient, borderRadius: [4, 4, 0, 0] }, data: leads },
+        { name: 'CPL', type: 'line', yAxisIndex: 1, smooth: true, itemStyle: { color: '#ef4444' }, lineStyle: { width: 3 }, data: cpl }
       ]
     };
   }, [chartData]);
 
-  // 3. Funnel Chart Option (3D Effect with Lighting)
-  const getFunnelOption = useMemo(() => {
+  // 3. Marketing Funnel (Ads Logic Only)
+  const getMarketingFunnelOption = useMemo(() => {
     const impressions = campaigns.reduce((acc, c) => acc + (c.impressions || 0), 0);
     const clicks = campaigns.reduce((acc, c) => acc + (c.clicks || 0), 0);
     const leads = campaigns.reduce((acc, c) => acc + (c.leads || 0), 0);
-    const purchases = campaigns.reduce((acc, c) => acc + (c.purchases || 0), 0);
+    const adSales = campaigns.reduce((acc, c) => acc + (c.purchases || 0), 0);
 
-    const data = [
-      { name: 'IMPRESSÕES', value: impressions, realValue: impressions },
-      { name: 'CLIQUES', value: clicks, realValue: clicks },
-      { name: 'LEADS', value: leads, realValue: leads },
-      { name: 'VENDAS', value: purchases, realValue: purchases }
-    ];
-
-    // Gradiente 3D com iluminação central (Highlight)
     const create3DGradient = (colorStart: string, colorMid: string, colorEnd: string) => {
         return new echarts.graphic.LinearGradient(0, 0, 1, 0, [
             { offset: 0, color: colorStart },
-            { offset: 0.4, color: colorMid }, // Ponto de luz (Highlight)
+            { offset: 0.4, color: colorMid },
             { offset: 1, color: colorEnd }
         ]);
     };
 
+    const data = [
+        { name: 'IMPRESSÕES', value: impressions, realValue: impressions },
+        { name: 'CLIQUES', value: clicks, realValue: clicks },
+        { name: 'LEADS', value: leads, realValue: leads },
+        { name: 'VENDAS (ADS)', value: adSales, realValue: adSales }
+    ];
+    
     const colors = [
         create3DGradient('#0891b2', '#67e8f9', '#0e7490'), // Cyan
         create3DGradient('#2563eb', '#93c5fd', '#1e40af'), // Blue
@@ -582,83 +481,71 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, onBack }) => {
     ];
 
     return {
-      toolbox: {
-        feature: {
-          saveAsImage: { show: true, title: 'Salvar' }
-        },
-        right: '2%'
-      },
+      title: { text: 'Funil de Marketing (Ads)', left: 'center', textStyle: { fontSize: 14, color: '#64748b' }, top: 5 },
+      toolbox: { feature: { saveAsImage: { show: true, title: 'Salvar' } }, right: '2%' },
       tooltip: {
         trigger: 'item',
-        formatter: (params: any) => {
-             const val = params.data.realValue.toLocaleString();
-             return `<div class="font-bold text-slate-700 mb-1">${params.name}</div><div class="text-indigo-600 font-black text-lg">${val}</div>`;
-        },
-        backgroundColor: 'rgba(255, 255, 255, 0.95)',
-        borderRadius: 8,
-        shadowBlur: 10,
-        shadowColor: 'rgba(0,0,0,0.1)',
-        textStyle: { color: '#1e293b' }
+        formatter: (params: any) => `<div class="font-bold text-slate-700 mb-1">${params.name}</div><div class="text-indigo-600 font-black text-lg">${params.data.realValue.toLocaleString()}</div>`
       },
-      series: [
-        {
+      series: [{
           name: 'Funnel',
           type: 'funnel',
-          left: '10%',
-          right: '10%',
-          top: 20,
-          bottom: 20,
-          width: '80%',
-          minSize: '0%',
-          maxSize: '100%',
-          sort: 'none',
-          gap: 6, 
-          
-          itemStyle: {
-            borderColor: 'transparent',
-            borderWidth: 0,
-            shadowBlur: 20,
-            shadowOffsetX: 0,
-            shadowOffsetY: 10,
-            shadowColor: 'rgba(0,0,0,0.2)' // Sombra projetada
-          },
-
-          label: {
-            show: true,
-            position: 'inside',
-            formatter: (params: any) => {
-               return `{value|${params.data.realValue.toLocaleString()}}\n{title|${params.name}}`;
-            },
-            rich: {
-                title: {
-                    color: 'rgba(255,255,255,0.9)',
-                    fontSize: 10,
-                    fontWeight: 'bold',
-                    lineHeight: 14,
-                    align: 'center',
-                    padding: [4, 0, 0, 0]
-                },
-                value: {
-                    color: '#fff',
-                    fontSize: 16,
-                    fontWeight: 800,
-                    align: 'center',
-                    textShadowBlur: 2,
-                    textShadowColor: 'rgba(0,0,0,0.3)'
-                }
-            }
-          },
-          labelLine: { show: false },
-          data: data.map((d, i) => ({
-             value: d.value || 1, 
-             name: d.name,
-             realValue: d.realValue,
-             itemStyle: { color: colors[i] }
-          }))
-        }
-      ]
+          left: '10%', right: '10%', top: 40, bottom: 20, width: '80%', minSize: '0%', maxSize: '100%', sort: 'none', gap: 6,
+          label: { show: true, position: 'inside', formatter: (params: any) => `{value|${params.data.realValue.toLocaleString()}}\n{title|${params.name}}`, rich: { title: { color: 'rgba(255,255,255,0.9)', fontSize: 10, fontWeight: 'bold' }, value: { color: '#fff', fontSize: 16, fontWeight: 800 } } },
+          data: data.map((d, i) => ({ value: d.value || 1, name: d.name, realValue: d.realValue, itemStyle: { color: colors[i] } }))
+      }]
     };
   }, [campaigns]);
+
+  // 4. Commercial Funnel (CRM Logic Only)
+  const getCommercialFunnelOption = useMemo(() => {
+    // Métricas de CRM (Filtradas pelo período)
+    const filteredActivities = activities.filter(a => a.date >= dateRange.start && a.date <= dateRange.end);
+    
+    // --- ATUALIZAÇÃO: Cálculo usando 'quantity' ---
+    const meetings = filteredActivities.filter(a => a.type === 'meeting').reduce((acc, a) => acc + (a.quantity || 1), 0);
+    const proposals = filteredActivities.filter(a => a.type === 'proposal').reduce((acc, a) => acc + (a.quantity || 1), 0);
+    const leads = filteredStats.totalLeads; // Leads totais vindos do Marketing
+    const dealsClosed = deals.filter(d => d.date >= dateRange.start && d.date <= dateRange.end).length;
+
+    const create3DGradient = (colorStart: string, colorMid: string, colorEnd: string) => {
+        return new echarts.graphic.LinearGradient(0, 0, 1, 0, [
+            { offset: 0, color: colorStart },
+            { offset: 0.4, color: colorMid },
+            { offset: 1, color: colorEnd }
+        ]);
+    };
+
+    const data = [
+        { name: 'LEADS TOTAIS', value: leads, realValue: leads },
+        { name: 'REUNIÕES', value: meetings, realValue: meetings },
+        { name: 'PROPOSTAS', value: proposals, realValue: proposals },
+        { name: 'FECHAMENTOS', value: dealsClosed, realValue: dealsClosed }
+    ];
+    
+    const colors = [
+        create3DGradient('#d97706', '#fbbf24', '#b45309'), // Amber
+        create3DGradient('#ea580c', '#fdba74', '#c2410c'), // Orange
+        create3DGradient('#16a34a', '#86efac', '#14532d'), // Green
+        create3DGradient('#047857', '#6ee7b7', '#064e3b')  // Emerald Dark
+    ];
+
+    return {
+      title: { text: 'Funil Comercial (CRM Local)', left: 'center', textStyle: { fontSize: 14, color: '#64748b' }, top: 5 },
+      toolbox: { feature: { saveAsImage: { show: true, title: 'Salvar' } }, right: '2%' },
+      tooltip: {
+        trigger: 'item',
+        formatter: (params: any) => `<div class="font-bold text-slate-700 mb-1">${params.name}</div><div class="text-emerald-600 font-black text-lg">${params.data.realValue.toLocaleString()}</div>`
+      },
+      series: [{
+          name: 'Funnel',
+          type: 'funnel',
+          left: '10%', right: '10%', top: 40, bottom: 20, width: '80%', minSize: '0%', maxSize: '100%', sort: 'none', gap: 6,
+          label: { show: true, position: 'inside', formatter: (params: any) => `{value|${params.data.realValue.toLocaleString()}}\n{title|${params.name}}`, rich: { title: { color: 'rgba(255,255,255,0.9)', fontSize: 10, fontWeight: 'bold' }, value: { color: '#fff', fontSize: 16, fontWeight: 800 } } },
+          data: data.map((d, i) => ({ value: d.value || 1, name: d.name, realValue: d.realValue, itemStyle: { color: colors[i] } }))
+      }]
+    };
+  }, [filteredStats.totalLeads, activities, deals, dateRange]);
 
 
   const dateOptionLabels: Record<string, string> = {
@@ -666,6 +553,105 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, onBack }) => {
     '14D': 'Últimos 14 dias',
     '30D': 'Últimos 30 dias',
     'CUSTOM': 'Personalizado'
+  };
+
+  // Renderiza a lista lateral dependendo da aba ativa (Vendas ou Atividades)
+  const renderSidePanelContent = () => {
+    if (crmListTab === 'deals') {
+        return (
+            <>
+                <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-base md:text-lg font-bold text-slate-800 flex items-center gap-2">
+                        <ShoppingBag size={18} className="text-indigo-600" />
+                        Vendas
+                    </h3>
+                    <div className="flex gap-2">
+                        <button onClick={() => setIsSaleModalOpen(true)} className="flex items-center gap-1 text-xs font-bold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition-colors">
+                            <Plus size={14} /> Nova
+                        </button>
+                    </div>
+                </div>
+                <div className="flex-1 overflow-y-auto pr-1 max-h-[400px] md:max-h-[550px] custom-scrollbar space-y-3">
+                    {deals.length > 0 ? deals.map(deal => (
+                        <div key={deal.id} className="p-3 bg-slate-50 rounded-lg border border-slate-100 flex justify-between items-center hover:bg-slate-100 transition-colors">
+                            <div>
+                                <p className="font-bold text-slate-700 text-xs md:text-sm">{deal.description}</p>
+                                <p className="text-[10px] text-slate-500">{new Date(deal.date).toLocaleDateString('pt-BR')}</p>
+                            </div>
+                            <div className="text-right">
+                                <p className="text-green-600 font-extrabold text-xs md:text-sm">R$ {deal.total_value.toLocaleString()}</p>
+                                <p className="text-[9px] text-slate-400">{deal.quantity} un.</p>
+                            </div>
+                        </div>
+                    )) : (
+                        <div className="h-full flex flex-col items-center justify-center text-slate-400 text-center italic text-xs border-2 border-dashed border-slate-100 rounded-lg p-6">
+                            <p>Nenhuma venda registrada.</p>
+                        </div>
+                    )}
+                </div>
+            </>
+        );
+    } else {
+        // Lista de Atividades (CRM)
+        const filteredActs = activities.filter(a => a.date >= dateRange.start && a.date <= dateRange.end);
+        
+        return (
+            <>
+                <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-base md:text-lg font-bold text-slate-800 flex items-center gap-2">
+                        <Users size={18} className="text-blue-600" />
+                        Atividades CRM
+                    </h3>
+                </div>
+                <div className="flex-1 overflow-y-auto pr-1 max-h-[400px] md:max-h-[550px] custom-scrollbar space-y-3">
+                    {filteredActs.length > 0 ? filteredActs.map(act => (
+                        <div key={act.id} className="p-3 bg-slate-50 rounded-lg border border-slate-100 relative group hover:bg-white hover:shadow-sm transition-all">
+                            <div className="flex justify-between items-start mb-1">
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase ${act.type === 'meeting' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>
+                                    {act.type === 'meeting' ? 'Reunião' : 'Proposta'}
+                                </span>
+                                <span className="text-[10px] text-slate-400">{new Date(act.date).toLocaleDateString('pt-BR')}</span>
+                            </div>
+                            
+                            {/* --- Atualização: Exibir badge de lote se quantity > 1 --- */}
+                            {(act.quantity && act.quantity > 1) ? (
+                                <p className="font-bold text-slate-700 text-sm mb-0.5">
+                                    Resumo Semanal: <span className="text-indigo-600">{act.quantity} {act.type === 'meeting' ? 'Reuniões' : 'Propostas'}</span>
+                                </p>
+                            ) : (
+                                <p className="font-bold text-slate-700 text-sm mb-0.5">{act.prospect_name || 'Prospect sem nome'}</p>
+                            )}
+                            
+                            {act.type === 'proposal' && act.value && (
+                                <p className="text-xs font-bold text-emerald-600">Valor: R$ {act.value.toLocaleString('pt-BR')}</p>
+                            )}
+
+                            {/* --- Exibir Qualidade do Lead --- */}
+                            {act.lead_quality_score && (
+                                <div className="flex items-center gap-1 mt-1">
+                                    <span className="text-[10px] text-slate-500 font-medium">Qualidade Leads:</span>
+                                    <div className="flex">
+                                        {[1, 2, 3, 4, 5].map(s => (
+                                            <div key={s} className={`w-1.5 h-1.5 rounded-full mx-0.5 ${s <= act.lead_quality_score! ? 'bg-yellow-400' : 'bg-slate-200'}`}></div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                            
+                            {act.notes && (
+                                <p className="text-[10px] text-slate-500 mt-1 italic line-clamp-2">"{act.notes}"</p>
+                            )}
+                        </div>
+                    )) : (
+                        <div className="h-full flex flex-col items-center justify-center text-slate-400 text-center italic text-xs border-2 border-dashed border-slate-100 rounded-lg p-6">
+                            <p>Nenhuma atividade encontrada neste período.</p>
+                            <p className="mt-1">Use o link público para registrar.</p>
+                        </div>
+                    )}
+                </div>
+            </>
+        );
+    }
   };
 
   return (
@@ -810,15 +796,32 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, onBack }) => {
               <h3 className="text-base md:text-lg font-bold text-slate-800">Performance Detalhada</h3>
               
               <div className="bg-slate-100 p-1 rounded-lg flex gap-1 w-full sm:w-auto overflow-x-auto no-scrollbar">
-                {['finance', 'acquisition', 'funnel'].map((type) => (
-                  <button 
-                    key={type}
-                    onClick={() => setActiveChart(type as any)}
-                    className={`flex-1 sm:flex-none px-3 py-1.5 text-[10px] font-bold rounded-md transition-all whitespace-nowrap uppercase ${activeChart === type ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}
-                  >
-                    {type === 'finance' ? 'Financeiro' : type === 'acquisition' ? 'Aquisição' : 'Funil'}
-                  </button>
-                ))}
+                <button 
+                  onClick={() => setActiveChart('finance')}
+                  className={`flex-1 sm:flex-none px-3 py-1.5 text-[10px] font-bold rounded-md transition-all whitespace-nowrap uppercase ${activeChart === 'finance' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}
+                >
+                  Financeiro
+                </button>
+                <button 
+                  onClick={() => setActiveChart('acquisition')}
+                  className={`flex-1 sm:flex-none px-3 py-1.5 text-[10px] font-bold rounded-md transition-all whitespace-nowrap uppercase ${activeChart === 'acquisition' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}
+                >
+                  Aquisição
+                </button>
+                <button 
+                  onClick={() => setActiveChart('marketing_funnel')}
+                  className={`flex-1 sm:flex-none px-3 py-1.5 text-[10px] font-bold rounded-md transition-all whitespace-nowrap uppercase ${activeChart === 'marketing_funnel' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}
+                >
+                  Funil de Marketing
+                </button>
+                {currentClient.crm_enabled && (
+                    <button 
+                      onClick={() => setActiveChart('commercial_funnel')}
+                      className={`flex-1 sm:flex-none px-3 py-1.5 text-[10px] font-bold rounded-md transition-all whitespace-nowrap uppercase ${activeChart === 'commercial_funnel' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500'}`}
+                    >
+                      Funil de Vendas
+                    </button>
+                )}
               </div>
             </div>
             
@@ -839,9 +842,17 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, onBack }) => {
                     notMerge={true}
                  />
                )}
-               {activeChart === 'funnel' && (
+               {activeChart === 'marketing_funnel' && (
                  <ReactECharts 
-                    option={getFunnelOption} 
+                    option={getMarketingFunnelOption} 
+                    style={{ height: '100%', width: '100%', minHeight: '400px' }} 
+                    opts={{ renderer: 'svg' }}
+                    notMerge={true}
+                 />
+               )}
+               {activeChart === 'commercial_funnel' && (
+                 <ReactECharts 
+                    option={getCommercialFunnelOption} 
                     style={{ height: '100%', width: '100%', minHeight: '400px' }} 
                     opts={{ renderer: 'svg' }}
                     notMerge={true}
@@ -851,16 +862,33 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, onBack }) => {
           </div>
         )}
 
-        {/* Offline Sales */}
+        {/* CRM / Vendas Side Panel */}
         {loading ? (
           <SalesSkeleton />
         ) : (
           <div className="bg-white p-4 md:p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col h-[500px] md:h-[650px] lg:h-auto">
-             <div className="flex justify-between items-center mb-4">
-                <h3 className="text-base md:text-lg font-bold text-slate-800 flex items-center gap-2">
-                  <ShoppingBag size={18} className="text-indigo-600" />
-                  Vendas Offline
-                </h3>
+             
+             {/* Header com Abas (Se CRM Ativo) */}
+             <div className="flex justify-between items-start mb-4">
+                <div className="flex gap-2">
+                    {currentClient.crm_enabled ? (
+                        <div className="bg-slate-100 p-1 rounded-lg flex gap-1">
+                            <button 
+                                onClick={() => setCrmListTab('deals')}
+                                className={`px-3 py-1 text-[10px] font-bold rounded transition-all ${crmListTab === 'deals' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}
+                            >
+                                Vendas
+                            </button>
+                            <button 
+                                onClick={() => setCrmListTab('activities')}
+                                className={`px-3 py-1 text-[10px] font-bold rounded transition-all ${crmListTab === 'activities' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}
+                            >
+                                Atividades
+                            </button>
+                        </div>
+                    ) : null}
+                </div>
+
                 <div className="flex gap-2">
                   <button 
                     onClick={handleCopyPublicLink} 
@@ -869,31 +897,11 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, onBack }) => {
                   >
                     {linkCopied ? <Check size={14} /> : <Link size={14} />}
                   </button>
-                  <button onClick={() => setIsSaleModalOpen(true)} className="flex items-center gap-1 text-xs font-bold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition-colors">
-                    <Plus size={14} /> Nova Venda
-                  </button>
                 </div>
              </div>
              
-             <div className="flex-1 overflow-y-auto pr-1 max-h-[400px] md:max-h-[550px] custom-scrollbar space-y-3">
-                {deals.length > 0 ? deals.map(deal => (
-                  <div key={deal.id} className="p-3 bg-slate-50 rounded-lg border border-slate-100 flex justify-between items-center hover:bg-slate-100 transition-colors">
-                     <div>
-                        <p className="font-bold text-slate-700 text-xs md:text-sm">{deal.description}</p>
-                        <p className="text-[10px] text-slate-500">{new Date(deal.date).toLocaleDateString('pt-BR')}</p>
-                     </div>
-                     <div className="text-right">
-                        <p className="text-green-600 font-extrabold text-xs md:text-sm">R$ {deal.total_value.toLocaleString()}</p>
-                        <p className="text-[9px] text-slate-400">{deal.quantity} un.</p>
-                     </div>
-                  </div>
-                )) : (
-                  <div className="h-full flex flex-col items-center justify-center text-slate-400 text-center italic text-xs border-2 border-dashed border-slate-100 rounded-lg p-6">
-                     <p>Nenhuma venda registrada.</p>
-                     <p className="mt-2 text-[10px] max-w-[150px]">Envie o link para seu cliente registrar vendas automaticamente.</p>
-                  </div>
-                )}
-             </div>
+             {renderSidePanelContent()}
+             
           </div>
         )}
       </div>

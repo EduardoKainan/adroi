@@ -12,7 +12,9 @@ export const commercialService = {
         date: activity.date,
         prospect_name: activity.prospect_name || null,
         value: activity.value || null,
-        notes: activity.notes || null 
+        notes: activity.notes || null,
+        quantity: activity.quantity || 1, // Default 1 para registros individuais
+        lead_quality_score: activity.lead_quality_score || null
     };
 
     const { data, error } = await supabase
@@ -56,19 +58,24 @@ export const commercialService = {
     // Busca atividades recentes
     const { data, error } = await supabase
       .from('commercial_activities')
-      .select('type, value')
+      .select('type, value, quantity')
       .eq('client_id', clientId)
       .gte('date', dateStr);
 
     if (error) return { meetings: 0, proposals: 0, pipelineValue: 0 };
 
-    const meetings = data.filter(a => a.type === 'meeting').length;
+    // Agora soma a coluna quantity (ou assume 1 se nulo)
+    const meetings = data
+      .filter(a => a.type === 'meeting')
+      .reduce((acc, curr) => acc + (curr.quantity || 1), 0);
+      
     const proposals = data.filter(a => a.type === 'proposal');
+    const proposalsCount = proposals.reduce((acc, curr) => acc + (curr.quantity || 1), 0);
     const pipelineValue = proposals.reduce((acc, curr) => acc + (curr.value || 0), 0);
 
     return {
       meetings,
-      proposals: proposals.length,
+      proposals: proposalsCount,
       pipelineValue
     };
   }

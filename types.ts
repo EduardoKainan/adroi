@@ -46,6 +46,11 @@ export interface CommercialActivity {
   prospect_name?: string;
   value?: number;
   notes?: string;
+  
+  // Novos campos para Check-in Semanal
+  quantity?: number; // Quantidade em lote (ex: 12 reuniões)
+  lead_quality_score?: number; // 1 a 5
+  
   created_at?: string;
 }
 
