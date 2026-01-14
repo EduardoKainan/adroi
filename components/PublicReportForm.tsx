@@ -39,8 +39,10 @@ export const PublicReportForm: React.FC<PublicReportFormProps> = ({ clientId }) 
     // Novos campos para Weekly Batch
     weeklyMeetings: 0,
     weeklyProposals: 0,
-    weeklyProposalValue: '',
-    weeklyLeadQuality: 3
+    weeklyLeadQuality: 3,
+    // Novos campos de Fechamento (Sales)
+    weeklySalesCount: 0,
+    weeklySalesTotalValue: ''
   });
 
   useEffect(() => {
@@ -70,7 +72,7 @@ export const PublicReportForm: React.FC<PublicReportFormProps> = ({ clientId }) 
     setSubmitting(true);
     try {
       if (mode === 'SALE') {
-        // Venda (mantém lógica antiga de Deal para dashboards financeiros)
+        // Venda Individual (mantém lógica antiga)
         await dealService.createDeal({
           client_id: clientId,
           date: formData.date,
@@ -79,16 +81,16 @@ export const PublicReportForm: React.FC<PublicReportFormProps> = ({ clientId }) 
           unit_value: Number(formData.unit_value)
         });
       } else if (mode === 'MEETING') {
-        // Reunião
+        // Reunião Individual
         await commercialService.addActivity({
             client_id: clientId,
             type: 'meeting',
             date: formData.date,
-            prospect_name: formData.description, // Reusa o campo description como nome do prospect
-            notes: formData.notes || '' // Garante string vazia se undefined
+            prospect_name: formData.description,
+            notes: formData.notes || '' 
         });
       } else if (mode === 'PROPOSAL') {
-        // Proposta
+        // Proposta Individual
         await commercialService.addActivity({
             client_id: clientId,
             type: 'proposal',
@@ -98,10 +100,10 @@ export const PublicReportForm: React.FC<PublicReportFormProps> = ({ clientId }) 
             notes: formData.notes || ''
         });
       } else if (mode === 'WEEKLY') {
-         // Lógica de envio em lote (Batch)
+         // --- LÓGICA DE ENVIO EM LOTE (BATCH) ---
          const promises = [];
          
-         // 1. Salvar Reuniões (se houver) - Anexa o feedback qualitativo aqui
+         // 1. Salvar Reuniões (com feedback qualitativo)
          if (Number(formData.weeklyMeetings) > 0) {
             promises.push(commercialService.addActivity({
                 client_id: clientId,
@@ -114,7 +116,7 @@ export const PublicReportForm: React.FC<PublicReportFormProps> = ({ clientId }) 
             }));
          }
          
-         // 2. Salvar Propostas (se houver)
+         // 2. Salvar Propostas (apenas quantidade, sem valor aqui)
          if (Number(formData.weeklyProposals) > 0) {
             promises.push(commercialService.addActivity({
                 client_id: clientId,
@@ -122,15 +124,26 @@ export const PublicReportForm: React.FC<PublicReportFormProps> = ({ clientId }) 
                 date: formData.date,
                 prospect_name: 'Resumo Semanal',
                 quantity: Number(formData.weeklyProposals),
-                value: Number(formData.weeklyProposalValue) || 0
+                value: 0 // Valor ignorado no lote de propostas conforme solicitado
+            }));
+         }
+
+         // 3. Salvar Vendas/Contratos (na tabela de Deals)
+         if (Number(formData.weeklySalesCount) > 0) {
+            promises.push(dealService.createDeal({
+                client_id: clientId,
+                date: formData.date,
+                description: 'Resumo Semanal - Fechamentos',
+                quantity: Number(formData.weeklySalesCount),
+                total_value: Number(formData.weeklySalesTotalValue) || 0
             }));
          }
          
-         // Se o usuário preencheu apenas feedback qualitativo sem números (raro, mas possível)
+         // Caso especial: Apenas feedback qualitativo sem números
          if (promises.length === 0 && formData.notes) {
             promises.push(commercialService.addActivity({
                 client_id: clientId,
-                type: 'meeting', // Default to meeting container for feedback
+                type: 'meeting',
                 date: formData.date,
                 prospect_name: 'Feedback Semanal (Sem Dados)',
                 notes: formData.notes,
@@ -152,11 +165,11 @@ export const PublicReportForm: React.FC<PublicReportFormProps> = ({ clientId }) 
           notes: '',
           weeklyMeetings: 0,
           weeklyProposals: 0,
-          weeklyProposalValue: '',
-          weeklyLeadQuality: 3
+          weeklyLeadQuality: 3,
+          weeklySalesCount: 0,
+          weeklySalesTotalValue: ''
       });
       
-      // Reset success message after 3 seconds and go back to menu if applicable
       setTimeout(() => {
           setSuccess(false);
           if (clientInfo?.crm_enabled) {
@@ -166,14 +179,9 @@ export const PublicReportForm: React.FC<PublicReportFormProps> = ({ clientId }) 
 
     } catch (err: any) {
       console.error("Erro no formulário público:", err);
-      
-      // Tratamento de erro detalhado para ajudar o usuário
       let msg = 'Erro ao salvar.';
       if (err?.message) msg = err.message;
-      if (err?.code === '42703') msg = 'Erro de Banco de Dados: Coluna faltando na tabela (provavelmente "quantity" ou "lead_quality_score"). Contate o suporte.';
-      if (err?.code === 'PGRST204') msg = 'Erro de Banco de Dados: Tabela commercial_activities não encontrada.';
-      
-      alert(`${msg}\n\nVerifique se o SQL de atualização foi rodado no Supabase.`);
+      alert(`${msg}\n\nVerifique sua conexão ou contate o suporte.`);
     } finally {
       setSubmitting(false);
     }
@@ -329,7 +337,7 @@ export const PublicReportForm: React.FC<PublicReportFormProps> = ({ clientId }) 
              <form onSubmit={handleSubmit} className="p-6 md:p-8 space-y-6">
                 
                 {mode === 'WEEKLY' ? (
-                  // --- FORMULÁRIO SEMANAL (NOVO) ---
+                  // --- FORMULÁRIO SEMANAL (ATUALIZADO) ---
                   <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
                       {/* Data de Referência */}
                       <div>
@@ -346,48 +354,64 @@ export const PublicReportForm: React.FC<PublicReportFormProps> = ({ clientId }) 
                         </div>
                       </div>
                       
-                      {/* Bloco Quantitativo */}
+                      {/* Bloco Quantitativo - ATUALIZADO 2x2 GRID */}
                       <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-4">
                          <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Números da Semana</h4>
                          
                          <div className="grid grid-cols-2 gap-4">
+                            {/* Reuniões */}
                             <div>
                                 <label className="block text-xs font-bold text-slate-600 mb-1">Reuniões</label>
                                 <input 
                                     type="number"
                                     min="0"
-                                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
                                     placeholder="0"
                                     value={formData.weeklyMeetings}
                                     onChange={e => setFormData({...formData, weeklyMeetings: Number(e.target.value)})}
                                 />
                             </div>
+                            {/* Propostas */}
                             <div>
                                 <label className="block text-xs font-bold text-slate-600 mb-1">Propostas</label>
                                 <input 
                                     type="number"
                                     min="0"
-                                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
                                     placeholder="0"
                                     value={formData.weeklyProposals}
                                     onChange={e => setFormData({...formData, weeklyProposals: Number(e.target.value)})}
                                 />
                             </div>
                          </div>
-                         
-                         <div>
-                             <label className="block text-xs font-bold text-slate-600 mb-1">Valor Total em Proposta (R$)</label>
-                             <div className="relative">
-                                <DollarSign size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+
+                         <div className="h-px bg-slate-200 w-full my-2"></div>
+
+                         <div className="grid grid-cols-2 gap-4">
+                            {/* Vendas (Quantidade) */}
+                            <div>
+                                <label className="block text-xs font-bold text-emerald-700 mb-1">Contratos</label>
                                 <input 
-                                    type="number" 
-                                    step="0.01"
-                                    className="w-full pl-8 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
-                                    placeholder="0,00"
-                                    value={formData.weeklyProposalValue}
-                                    onChange={e => setFormData({...formData, weeklyProposalValue: e.target.value})}
+                                    type="number"
+                                    min="0"
+                                    className="w-full px-3 py-2 border border-emerald-200 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none bg-emerald-50/50"
+                                    placeholder="0"
+                                    value={formData.weeklySalesCount}
+                                    onChange={e => setFormData({...formData, weeklySalesCount: Number(e.target.value)})}
                                 />
-                             </div>
+                            </div>
+                            {/* Vendas (Valor Total) */}
+                            <div>
+                                <label className="block text-xs font-bold text-emerald-700 mb-1">Valor Total (R$)</label>
+                                <input 
+                                    type="number"
+                                    step="0.01"
+                                    className="w-full px-3 py-2 border border-emerald-200 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none bg-emerald-50/50"
+                                    placeholder="0,00"
+                                    value={formData.weeklySalesTotalValue}
+                                    onChange={e => setFormData({...formData, weeklySalesTotalValue: e.target.value})}
+                                />
+                            </div>
                          </div>
                       </div>
 

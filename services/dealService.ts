@@ -19,8 +19,16 @@ export const dealService = {
 
   // Add a new manual deal
   async createDeal(deal: Partial<Deal>) {
-    // Calculate total value automatically to ensure backend consistency
-    const total_value = (deal.quantity || 1) * (deal.unit_value || 0);
+    // Calculate total value automatically ONLY IF total_value is not provided explicitly
+    // This allows batch entries (Weekly Report) to define the total directly
+    const total_value = deal.total_value !== undefined 
+      ? deal.total_value 
+      : (deal.quantity || 1) * (deal.unit_value || 0);
+
+    // If unit_value is missing but we have total and quantity, calculate it for consistency
+    const unit_value = deal.unit_value !== undefined
+      ? deal.unit_value
+      : (deal.quantity && deal.quantity > 0 ? total_value / deal.quantity : total_value);
 
     const { data, error } = await supabase
       .from('deals')
@@ -29,7 +37,7 @@ export const dealService = {
         date: deal.date,
         description: deal.description,
         quantity: deal.quantity,
-        unit_value: deal.unit_value,
+        unit_value: unit_value,
         total_value: total_value
       }])
       .select()
