@@ -6,11 +6,11 @@ import { supabase } from '../lib/supabase';
 const getApiKey = () => {
   try {
     // Tenta ler do Vite (import.meta.env)
-    if (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_GOOGLE_API_KEY) {
+    if (typeof import.meta !== 'undefined' && (import.meta as any).env && (import.meta as any).env.VITE_GOOGLE_API_KEY) {
       return (import.meta as any).env.VITE_GOOGLE_API_KEY;
     }
     // Fallback para process.env
-    if (typeof process !== 'undefined' && process.env?.API_KEY) {
+    if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
       return process.env.API_KEY;
     }
   } catch (e) {
@@ -21,8 +21,15 @@ const getApiKey = () => {
 
 const API_KEY = getApiKey();
 
-// Inicializa o Gemini
-const ai = new GoogleGenAI({ apiKey: API_KEY });
+// Inicialização segura para evitar que o app quebre no load se a chave for inválida
+let ai: GoogleGenAI | null = null;
+try {
+  // Inicializa mesmo com string vazia para não dar throw no construtor
+  // O erro real será tratado ao chamar generateContent
+  ai = new GoogleGenAI({ apiKey: API_KEY || 'dummy_key_to_prevent_crash' });
+} catch (e) {
+  console.warn("Falha na inicialização do cliente AI:", e);
+}
 
 export const aiAnalysisService = {
   // --- MÉTODOS DE BANCO DE DADOS ---
@@ -73,11 +80,12 @@ export const aiAnalysisService = {
     metrics: DailyMetric[]
   ): Promise<Insight[]> {
     
-    if (!API_KEY) {
+    // Verificação de segurança antes de chamar a API
+    if (!API_KEY || !ai) {
       return [{
         type: 'warning',
         title: 'Chave de API Ausente',
-        description: 'A chave da API do Google Gemini não foi configurada no arquivo .env.',
+        description: 'A chave da API do Google Gemini não foi configurada ou detectada.',
         recommendation: 'Adicione VITE_GOOGLE_API_KEY ao seu arquivo .env para ativar a inteligência.'
       }];
     }
@@ -167,7 +175,7 @@ export const aiAnalysisService = {
       return [{
         type: 'info',
         title: 'Análise Indisponível',
-        description: 'Não foi possível conectar com a inteligência artificial no momento.',
+        description: 'Não foi possível conectar com a inteligência artificial no momento. Tente novamente mais tarde.',
         recommendation: 'Verifique sua conexão e a chave de API.'
       }];
     }
