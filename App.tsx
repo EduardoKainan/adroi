@@ -10,21 +10,19 @@ import { clientService, getLocalDateString } from './services/clientService';
 import { Loader2 } from 'lucide-react';
 
 const App: React.FC = () => {
-  // --- LÓGICA DE ROTEAMENTO MANUAL PARA LINK PÚBLICO ---
-  const [publicClientId, setPublicClientId] = useState<string | null>(null);
-
-  useEffect(() => {
-    // Verifica se a URL é do tipo /report/:clientId
+  // --- LÓGICA DE ROTEAMENTO (Correção Tela Branca) ---
+  // Inicializa o estado lendo a URL imediatamente, antes do primeiro render.
+  // Isso impede que o Dashboard administrativo tente carregar em rotas públicas.
+  const [publicClientId] = useState<string | null>(() => {
     const path = window.location.pathname;
     if (path.startsWith('/report/')) {
         const id = path.split('/report/')[1];
-        if (id) {
-            setPublicClientId(id);
-        }
+        if (id) return id;
     }
-  }, []);
+    return null;
+  });
 
-  // Se for uma rota pública, renderiza APENAS o formulário
+  // Se for uma rota pública, renderiza APENAS o formulário e encerra aqui.
   if (publicClientId) {
     return <PublicReportForm clientId={publicClientId} />;
   }
