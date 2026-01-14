@@ -122,7 +122,7 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, onBack }) => {
   // AI Insights State
   const [insights, setInsights] = useState<Insight[]>([]);
   const [loadingInsights, setLoadingInsights] = useState(false);
-  const [showInsights, setShowInsights] = useState(false);
+  const [showInsights, setShowInsights] = useState(true); // Default true se tiver insights
   
   const [currentClient, setCurrentClient] = useState<Client>(client);
 
@@ -185,24 +185,25 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, onBack }) => {
     
     setLoading(true);
     setChartsReady(false);
-    setShowInsights(false); // Reset insights on new data
-    setInsights([]);
 
     try {
       const startDateStr = dateRange.start;
       const endDateStr = dateRange.end;
 
-      const [campData, metricsData, contractData, dealsData] = await Promise.all([
+      const [campData, metricsData, contractData, dealsData, savedInsights] = await Promise.all([
         clientService.getCampaigns(currentClient.id, startDateStr, endDateStr),
         clientService.getClientMetrics(currentClient.id, startDateStr, endDateStr),
         contractService.getClientContract(currentClient.id),
-        dealService.getDeals(currentClient.id)
+        dealService.getDeals(currentClient.id),
+        aiAnalysisService.getSavedInsights(currentClient.id)
       ]);
       
       setCampaigns(campData);
       setChartData(metricsData);
       setContract(contractData);
       setDeals(dealsData);
+      setInsights(savedInsights);
+      
     } catch (error: any) {
       console.error("Failed to load client details:", error);
     } finally {
@@ -216,10 +217,11 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, onBack }) => {
     setDeals(dealsData);
   };
 
-  // --- Função para chamar IA ---
+  // --- Função para chamar IA e Salvar ---
   const handleGenerateInsights = async () => {
-     if (insights.length > 0) {
-       setShowInsights(!showInsights);
+     // Se já houver insights mas estiverem ocultos, apenas mostre
+     if (insights.length > 0 && !showInsights) {
+       setShowInsights(true);
        return;
      }
 
@@ -237,12 +239,30 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, onBack }) => {
 
      try {
        const generatedInsights = await aiAnalysisService.generateInsights(clientWithCurrentStats, campaigns, chartData);
-       setInsights(generatedInsights);
+       
+       // Salva automaticamente no banco se tiver retorno válido
+       if (generatedInsights.length > 0 && !generatedInsights[0].title.includes("Indisponível")) {
+           await aiAnalysisService.saveInsights(currentClient.id, generatedInsights);
+           // Recarrega do banco para ter os IDs corretos para exclusão
+           const saved = await aiAnalysisService.getSavedInsights(currentClient.id);
+           setInsights(saved);
+       } else {
+           setInsights(generatedInsights); // Mostra o erro ou insight temporário
+       }
      } catch (e) {
        console.error("Erro ao gerar insights", e);
      } finally {
        setLoadingInsights(false);
      }
+  };
+
+  const handleDismissInsight = async (id: string) => {
+    try {
+        await aiAnalysisService.deleteInsight(id);
+        setInsights(prev => prev.filter(i => i.id !== id));
+    } catch (error) {
+        console.error("Erro ao excluir insight", error);
+    }
   };
 
   useEffect(() => {
@@ -685,10 +705,10 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, onBack }) => {
                   onClick={handleGenerateInsights}
                   disabled={loadingInsights}
                   className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-xs font-bold border transition-colors shadow-sm
-                    ${showInsights ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-300 text-slate-700 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200'}
+                    ${showInsights && insights.length > 0 ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-300 text-slate-700 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200'}
                   `}
                 >
-                  {loadingInsights ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} className={showInsights ? "fill-indigo-300" : ""} />} 
+                  {loadingInsights ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} className={showInsights && insights.length > 0 ? "fill-indigo-300" : ""} />} 
                   {loadingInsights ? 'Analisando...' : 'Análise IA'}
                 </button>
                 <button onClick={handleCopyReport} className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-xs font-bold border transition-colors ${copied ? 'bg-green-50 text-green-700 border-green-200' : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'}`}>
@@ -726,8 +746,8 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, onBack }) => {
         </div>
       )}
 
-      {/* AI Insights Feed */}
-      {showInsights && <InsightsFeed insights={insights} loading={loadingInsights} />}
+      {/* AI Insights Feed - Agora com onDismiss */}
+      {showInsights && <InsightsFeed insights={insights} loading={loadingInsights} onDismiss={handleDismissInsight} />}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         

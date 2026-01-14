@@ -1,5 +1,6 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Client, Campaign, DailyMetric, Insight } from "../types";
+import { supabase } from '../lib/supabase';
 
 // Helper seguro para ler variáveis de ambiente no Vite ou Node
 const getApiKey = () => {
@@ -24,6 +25,48 @@ const API_KEY = getApiKey();
 const ai = new GoogleGenAI({ apiKey: API_KEY });
 
 export const aiAnalysisService = {
+  // --- MÉTODOS DE BANCO DE DADOS ---
+
+  // Salvar insights gerados no banco
+  async saveInsights(clientId: string, insights: Insight[]) {
+    if (!insights.length) return;
+
+    const payload = insights.map(insight => ({
+      client_id: clientId,
+      type: insight.type,
+      title: insight.title,
+      description: insight.description,
+      recommendation: insight.recommendation,
+      created_at: new Date().toISOString()
+    }));
+
+    const { error } = await supabase.from('insights').insert(payload);
+    if (error) console.error("Erro ao salvar insights:", error);
+  },
+
+  // Buscar insights salvos de um cliente
+  async getSavedInsights(clientId: string): Promise<Insight[]> {
+    const { data, error } = await supabase
+      .from('insights')
+      .select('*')
+      .eq('client_id', clientId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error("Erro ao buscar insights salvos:", error);
+      return [];
+    }
+    return data as Insight[];
+  },
+
+  // Deletar um insight específico (Concluir/Excluir)
+  async deleteInsight(insightId: string) {
+    const { error } = await supabase.from('insights').delete().eq('id', insightId);
+    if (error) throw error;
+  },
+
+  // --- MÉTODO DE IA (EXISTENTE) ---
+  
   async generateInsights(
     client: Client, 
     campaigns: Campaign[], 

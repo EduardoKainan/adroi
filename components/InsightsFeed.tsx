@@ -1,18 +1,19 @@
 import React from 'react';
 import { Insight } from '../types';
-import { AlertTriangle, TrendingUp, Info, AlertOctagon, Lightbulb, ArrowRight } from 'lucide-react';
+import { AlertTriangle, TrendingUp, Info, AlertOctagon, Lightbulb, ArrowRight, Check, Trash2, X } from 'lucide-react';
 
 interface InsightsFeedProps {
   insights: Insight[];
   loading: boolean;
+  onDismiss?: (id: string) => void;
 }
 
-export const InsightsFeed: React.FC<InsightsFeedProps> = ({ insights, loading }) => {
+export const InsightsFeed: React.FC<InsightsFeedProps> = ({ insights, loading, onDismiss }) => {
   if (loading) {
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 animate-pulse">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 animate-pulse mb-8">
         {[1, 2, 3].map(i => (
-          <div key={i} className="h-32 bg-slate-100 rounded-xl border border-slate-200"></div>
+          <div key={i} className="h-40 bg-slate-100 rounded-xl border border-slate-200"></div>
         ))}
       </div>
     );
@@ -53,15 +54,26 @@ export const InsightsFeed: React.FC<InsightsFeedProps> = ({ insights, loading })
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {insights.map((insight, idx) => (
           <div 
-            key={idx} 
-            className={`p-5 rounded-xl border shadow-sm transition-all hover:shadow-md cursor-default flex flex-col justify-between ${getStyles(insight.type)}`}
+            key={insight.id || idx} 
+            className={`p-5 rounded-xl border shadow-sm transition-all hover:shadow-md cursor-default flex flex-col justify-between relative group ${getStyles(insight.type)}`}
           >
+            {/* Dismiss Button */}
+            {onDismiss && insight.id && (
+                <button 
+                  onClick={() => onDismiss(insight.id!)}
+                  className="absolute top-3 right-3 p-1.5 rounded-full bg-white/50 hover:bg-white text-slate-400 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+                  title="Marcar como resolvido / Excluir"
+                >
+                  <X size={14} />
+                </button>
+            )}
+
             <div>
               <div className="flex items-center gap-2 mb-2 font-bold uppercase text-xs tracking-wider opacity-80">
                 {getIcon(insight.type)}
                 <span>{insight.type === 'critical' ? 'Ação Imediata' : insight.type === 'opportunity' ? 'Oportunidade' : insight.type === 'warning' ? 'Atenção' : 'Informativo'}</span>
               </div>
-              <h4 className="font-bold text-base mb-2 leading-tight">{insight.title}</h4>
+              <h4 className="font-bold text-base mb-2 leading-tight pr-6">{insight.title}</h4>
               <p className="text-sm opacity-90 mb-4 leading-relaxed">{insight.description}</p>
             </div>
             

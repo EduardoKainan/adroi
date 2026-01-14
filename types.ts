@@ -27,10 +27,12 @@ export interface Client {
 }
 
 export interface Insight {
+  id?: string; // ID do banco de dados (opcional pois o AI gera sem ID inicialmente)
   type: 'critical' | 'opportunity' | 'warning' | 'info';
   title: string;
   description: string;
   recommendation: string;
+  created_at?: string;
 }
 
 export interface Campaign {
