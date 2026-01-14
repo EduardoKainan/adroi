@@ -4,9 +4,20 @@ import { CommercialActivity } from '../types';
 export const commercialService = {
   // Registrar uma nova atividade (Reunião ou Proposta)
   async addActivity(activity: Omit<CommercialActivity, 'id' | 'created_at'>) {
+    
+    // Tratamento para garantir compatibilidade com o banco se colunas forem nullable
+    const payload = {
+        client_id: activity.client_id,
+        type: activity.type,
+        date: activity.date,
+        prospect_name: activity.prospect_name || null,
+        value: activity.value || null,
+        notes: activity.notes || null 
+    };
+
     const { data, error } = await supabase
       .from('commercial_activities')
-      .insert([activity])
+      .insert([payload])
       .select()
       .single();
 

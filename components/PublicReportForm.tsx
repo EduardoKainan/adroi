@@ -79,7 +79,7 @@ export const PublicReportForm: React.FC<PublicReportFormProps> = ({ clientId }) 
             type: 'meeting',
             date: formData.date,
             prospect_name: formData.description, // Reusa o campo description como nome do prospect
-            notes: formData.notes
+            notes: formData.notes || '' // Garante string vazia se undefined
         });
       } else if (mode === 'PROPOSAL') {
         // Proposta
@@ -89,7 +89,7 @@ export const PublicReportForm: React.FC<PublicReportFormProps> = ({ clientId }) 
             date: formData.date,
             prospect_name: formData.description,
             value: Number(formData.unit_value),
-            notes: formData.notes
+            notes: formData.notes || ''
         });
       }
 
@@ -105,9 +105,16 @@ export const PublicReportForm: React.FC<PublicReportFormProps> = ({ clientId }) 
           }
       }, 3000);
 
-    } catch (err) {
-      console.error(err);
-      alert('Erro ao salvar. Verifique se o sistema foi atualizado corretamente.');
+    } catch (err: any) {
+      console.error("Erro no formulário público:", err);
+      
+      // Tratamento de erro detalhado para ajudar o usuário
+      let msg = 'Erro ao salvar.';
+      if (err?.message) msg = err.message;
+      if (err?.code === '42703') msg = 'Erro de Banco de Dados: Coluna faltando na tabela (provavelmente "notes"). Contate o suporte.';
+      if (err?.code === 'PGRST204') msg = 'Erro de Banco de Dados: Tabela commercial_activities não encontrada.';
+      
+      alert(`${msg}\n\nVerifique se o SQL de atualização foi rodado no Supabase.`);
     } finally {
       setSubmitting(false);
     }
