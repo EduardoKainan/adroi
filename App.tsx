@@ -50,11 +50,30 @@ const App: React.FC = () => {
     setCurrentView(view);
   };
 
-  // Carrega dados de tarefas quando a view muda para TASKS
+  // Carrega dados baseados na view atual
   useEffect(() => {
-    if (currentView === 'TASKS') {
-      fetchTaskData();
-    }
+    const loadData = async () => {
+      // 1. Se estiver na visão de Tarefas, carrega tudo do módulo de gestão
+      if (currentView === 'TASKS') {
+        fetchTaskData();
+      }
+
+      // 2. Se estiver na visão de Detalhes do Cliente, garante que temos a lista completa para o Dropdown
+      // (Carrega se a lista estiver vazia ou tiver apenas 1 item - o selecionado)
+      if (currentView === 'CLIENT_DETAIL' && clients.length <= 1) {
+         try {
+             const today = new Date();
+             const start = new Date();
+             start.setDate(today.getDate() - 30); // Pega métricas básicas dos últimos 30 dias para a lista
+             const allClients = await clientService.getClients(getLocalDateString(start), getLocalDateString(today));
+             setClients(allClients);
+         } catch (e) {
+             console.error("Erro ao carregar lista de clientes para o menu:", e);
+         }
+      }
+    };
+    
+    loadData();
   }, [currentView]);
 
   const fetchTaskData = async () => {
@@ -157,6 +176,8 @@ const App: React.FC = () => {
         {currentView === 'CLIENT_DETAIL' && selectedClient && (
           <ClientView 
             client={selectedClient} 
+            clients={clients.length > 0 ? clients : [selectedClient]} // Passa a lista completa se disponível
+            onClientSwitch={handleClientSelect}
             onBack={() => handleViewChange('DASHBOARD')} 
           />
         )}

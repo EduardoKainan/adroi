@@ -115,6 +115,16 @@ export const ProfessionalDashboard: React.FC<ProfessionalDashboardProps> = ({ pr
     setDragOverColumn(null);
   };
 
+  // Helper para calcular progresso
+  const calculateProjectProgress = (projectId: string, manualProgress: number = 0) => {
+      const projectTasks = tasks.filter(t => t.projectId === projectId);
+      const total = projectTasks.length;
+      if (total === 0) return manualProgress; // Fallback para manual se não houver tarefas
+      
+      const completed = projectTasks.filter(t => t.completed).length;
+      return Math.round((completed / total) * 100);
+  };
+
   // Configuração das Colunas do Kanban
   const columns: {
     id: TaskCategory;
@@ -162,6 +172,11 @@ export const ProfessionalDashboard: React.FC<ProfessionalDashboardProps> = ({ pr
       icon: <Trash2 size={16} className="text-slate-500" />
     }
   ];
+
+  // Cálculo de progresso para o projeto selecionado no drawer
+  const selectedProjectProgress = selectedProject 
+    ? calculateProjectProgress(selectedProject.id, selectedProject.progress) 
+    : 0;
 
   return (
     <div className="flex flex-col h-[calc(100vh-6rem)] animate-in fade-in duration-500 gap-6 relative">
@@ -436,7 +451,11 @@ export const ProfessionalDashboard: React.FC<ProfessionalDashboardProps> = ({ pr
              </div>
              
              <div className="space-y-3">
-               {activeProjects.map(project => (
+               {activeProjects.map(project => {
+                 // Calcula progresso dinamicamente
+                 const dynamicProgress = calculateProjectProgress(project.id, project.progress);
+                 
+                 return (
                  <div 
                     key={project.id} 
                     onClick={() => setSelectedProject(project)}
@@ -446,14 +465,14 @@ export const ProfessionalDashboard: React.FC<ProfessionalDashboardProps> = ({ pr
                        <span className="text-xs font-bold text-slate-700 truncate max-w-[120px] group-hover:text-indigo-700 transition-colors" title={project.title}>
                          {project.title}
                        </span>
-                       <span className={`text-[10px] px-1.5 py-0.5 rounded border ${project.progress === 100 ? 'bg-green-100 text-green-700 border-green-200' : 'bg-white text-slate-500 border-slate-100'}`}>
-                         {project.progress}%
+                       <span className={`text-[10px] px-1.5 py-0.5 rounded border ${dynamicProgress === 100 ? 'bg-green-100 text-green-700 border-green-200' : 'bg-white text-slate-500 border-slate-100'}`}>
+                         {dynamicProgress}%
                        </span>
                     </div>
                     <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
                        <div 
-                         className={`h-full rounded-full ${project.progress === 100 ? 'bg-green-500' : 'bg-blue-500'}`} 
-                         style={{ width: `${project.progress}%` }}
+                         className={`h-full rounded-full ${dynamicProgress === 100 ? 'bg-green-500' : 'bg-blue-500'}`} 
+                         style={{ width: `${dynamicProgress}%` }}
                         ></div>
                     </div>
                     <div className="flex justify-between items-center mt-2 opacity-60 group-hover:opacity-100 transition-opacity">
@@ -464,7 +483,7 @@ export const ProfessionalDashboard: React.FC<ProfessionalDashboardProps> = ({ pr
                       <ChevronRight size={12} className="text-slate-400" />
                     </div>
                  </div>
-               ))}
+               );})}
                <button className="w-full py-2 text-xs text-slate-500 font-medium hover:text-indigo-600 border border-dashed border-slate-200 rounded-lg hover:border-indigo-300 transition-all">
                  Ver todos os projetos
                </button>
@@ -515,10 +534,10 @@ export const ProfessionalDashboard: React.FC<ProfessionalDashboardProps> = ({ pr
                <div className="mt-4">
                  <div className="flex justify-between text-xs mb-1">
                    <span className="font-semibold text-slate-600">Progresso</span>
-                   <span className="font-bold text-slate-800">{selectedProject.progress}%</span>
+                   <span className="font-bold text-slate-800">{selectedProjectProgress}%</span>
                  </div>
                  <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
-                   <div className="h-full bg-indigo-600 rounded-full transition-all duration-500" style={{ width: `${selectedProject.progress}%` }}></div>
+                   <div className="h-full bg-indigo-600 rounded-full transition-all duration-500" style={{ width: `${selectedProjectProgress}%` }}></div>
                  </div>
                </div>
             </div>

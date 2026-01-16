@@ -1,11 +1,11 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { Client, Contract, Campaign, DailyMetric, Deal, Insight, CommercialActivity } from '../types';
 import { clientService, getLocalDateString } from '../services/clientService';
 import { contractService } from '../services/contractService';
 import { dealService } from '../services/dealService';
 import { commercialService } from '../services/commercialService';
 import { aiAnalysisService } from '../services/aiAnalysisService';
-import { DollarSign, Target, TrendingUp, Calendar, Download, Loader2, Users, ShoppingBag, Plus, Copy, Check, BarChart, ChevronLeft, ChevronDown, Sparkles, PieChart, Link, ExternalLink, FileText, Briefcase } from 'lucide-react';
+import { DollarSign, Target, TrendingUp, Calendar, Download, Loader2, Users, ShoppingBag, Plus, Copy, Check, BarChart, ChevronLeft, ChevronDown, Sparkles, PieChart, Link, ExternalLink, FileText, Briefcase, Search, Activity } from 'lucide-react';
 import { NewSaleModal } from './NewSaleModal';
 import { InsightsFeed } from './InsightsFeed';
 // Importação do ECharts
@@ -14,6 +14,8 @@ import * as echarts from 'echarts';
 
 interface ClientViewProps {
   client: Client;
+  clients?: Client[]; // Lista completa para o dropdown
+  onClientSwitch?: (client: Client) => void; // Função para trocar
   onBack: () => void;
 }
 
@@ -57,29 +59,28 @@ const KPISkeleton = () => (
 );
 
 const ChartSkeleton = () => (
-  <div className="lg:col-span-2 bg-white p-4 md:p-6 rounded-xl border border-slate-200 shadow-sm h-[500px] flex flex-col">
-    <div className="flex justify-between items-center mb-6">
-      <SkeletonPulse className="h-6 w-48" />
-      <div className="flex gap-2">
-        <SkeletonPulse className="h-8 w-20" />
-        <SkeletonPulse className="h-8 w-20" />
-        <SkeletonPulse className="h-8 w-20" />
-      </div>
-    </div>
-    <div className="flex-1 w-full bg-slate-50 rounded-lg flex items-center justify-center">
-      <Loader2 className="animate-spin text-slate-300" size={32} />
-    </div>
+  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+    {[1, 2, 3, 4].map(i => (
+        <div key={i} className="bg-white p-4 md:p-6 rounded-xl border border-slate-200 shadow-sm h-[350px] flex flex-col">
+            <div className="flex justify-between items-center mb-6">
+            <SkeletonPulse className="h-6 w-48" />
+            </div>
+            <div className="flex-1 w-full bg-slate-50 rounded-lg flex items-center justify-center">
+            <Loader2 className="animate-spin text-slate-300" size={32} />
+            </div>
+        </div>
+    ))}
   </div>
 );
 
 const SalesSkeleton = () => (
-  <div className="bg-white p-4 md:p-6 rounded-xl border border-slate-200 shadow-sm h-[500px] flex flex-col">
+  <div className="bg-white p-4 md:p-6 rounded-xl border border-slate-200 shadow-sm h-[300px] flex flex-col mb-6">
     <div className="flex justify-between items-center mb-6">
       <SkeletonPulse className="h-6 w-32" />
       <SkeletonPulse className="h-8 w-8" />
     </div>
     <div className="space-y-4 flex-1">
-      {[1, 2, 3, 4].map((i) => (
+      {[1, 2, 3].map((i) => (
         <div key={i} className="flex justify-between items-center p-3 border border-slate-100 rounded-lg">
           <div className="space-y-2">
             <SkeletonPulse className="h-4 w-32" />
@@ -109,7 +110,7 @@ const TableSkeleton = () => (
   </div>
 );
 
-export const ClientView: React.FC<ClientViewProps> = ({ client, onBack }) => {
+export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], onClientSwitch, onBack }) => {
   const [loading, setLoading] = useState(true);
   const [chartsReady, setChartsReady] = useState(false);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
@@ -124,8 +125,12 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, onBack }) => {
   const [isSaleModalOpen, setIsSaleModalOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
-  const [activeChart, setActiveChart] = useState<'finance' | 'acquisition' | 'marketing_funnel' | 'commercial_funnel'>('finance');
   const [crmListTab, setCrmListTab] = useState<'deals' | 'activities'>('deals');
+  
+  // Header Dropdown State
+  const [isClientDropdownOpen, setIsClientDropdownOpen] = useState(false);
+  const [clientSearchTerm, setClientSearchTerm] = useState('');
+  const dropdownRef = useRef<HTMLDivElement>(null);
   
   // AI Insights State
   const [insights, setInsights] = useState<Insight[]>([]);
@@ -138,6 +143,26 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, onBack }) => {
   const [dateOption, setDateOption] = useState<DateRangeOption>('30D');
   const [dateRange, setDateRange] = useState({ start: '', end: '' });
   const [showDatePicker, setShowDatePicker] = useState(false);
+
+  // Sincroniza o currentClient quando a prop muda (ex: troca pelo pai)
+  useEffect(() => {
+    setCurrentClient(client);
+  }, [client]);
+
+  // Fecha dropdowns ao clicar fora
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+        const target = e.target as HTMLElement;
+        if (!target.closest('#date-picker-container')) {
+            setShowDatePicker(false);
+        }
+        if (dropdownRef.current && !dropdownRef.current.contains(target)) {
+            setIsClientDropdownOpen(false);
+        }
+    };
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, []);
 
   // Calcula datas iniciais
   useEffect(() => {
@@ -164,18 +189,6 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, onBack }) => {
       end: getLocalDateString(end)
     });
   }, [dateOption]);
-
-  // Fecha dropdown ao clicar fora
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-        const target = e.target as HTMLElement;
-        if (!target.closest('#date-picker-container')) {
-            setShowDatePicker(false);
-        }
-    };
-    document.addEventListener('click', handleClickOutside);
-    return () => document.removeEventListener('click', handleClickOutside);
-  }, []);
 
   const calculateFilteredStats = () => {
      // 1. Ads Metrics
@@ -296,7 +309,7 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, onBack }) => {
 
   useEffect(() => {
     fetchData();
-  }, [client.id, dateRange]);
+  }, [currentClient.id, dateRange]);
 
   const handleCopyReport = () => {
     const startDateParts = dateRange.start.split('-');
@@ -366,20 +379,40 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, onBack }) => {
 
   // 1. Finance Chart
   const getFinanceOption = useMemo(() => {
-    const offlineRevenueByDate: Record<string, number> = {};
+    if (!dateRange.start || !dateRange.end) return {};
+
+    // 1. Gerar array de datas completo para o eixo X
+    const allDates: string[] = [];
+    let curr = new Date(dateRange.start + 'T12:00:00'); // evita timezone shift
+    const end = new Date(dateRange.end + 'T12:00:00');
+    
+    while (curr <= end) {
+        // Garantir formato YYYY-MM-DD localmente
+        const year = curr.getFullYear();
+        const month = String(curr.getMonth() + 1).padStart(2, '0');
+        const day = String(curr.getDate()).padStart(2, '0');
+        allDates.push(`${year}-${month}-${day}`);
+        curr.setDate(curr.getDate() + 1);
+    }
+
+    // 2. Mapear dados existentes (Ads) por data
+    const adDataMap: Record<string, DailyMetric> = {};
+    chartData.forEach(d => { adDataMap[d.date] = d; });
+
+    // 3. Mapear dados manuais (Vendas) por data
+    const manualRevenueMap: Record<string, number> = {};
     deals.filter(d => d.date >= dateRange.start && d.date <= dateRange.end).forEach(d => {
-        if (!offlineRevenueByDate[d.date]) offlineRevenueByDate[d.date] = 0;
-        offlineRevenueByDate[d.date] += Number(d.total_value);
+        if (!manualRevenueMap[d.date]) manualRevenueMap[d.date] = 0;
+        manualRevenueMap[d.date] += Number(d.total_value);
     });
 
-    const dates = chartData.map(d => d.date.split('-')[2]); 
-    const spend = chartData.map(d => d.spend);
-    const adRevenue = chartData.map(d => d.revenue);
+    // 4. Construir vetores alinhados
+    const datesLabels = allDates.map(d => `${d.split('-')[2]}/${d.split('-')[1]}`); // DD/MM
+    const spendData = allDates.map(d => adDataMap[d]?.spend || 0);
+    const adRevenueData = allDates.map(d => adDataMap[d]?.revenue || 0);
+    const manualRevenueData = allDates.map(d => manualRevenueMap[d] || 0);
     
-    const blendedRevenue = chartData.map(d => {
-        const offline = offlineRevenueByDate[d.date] || 0;
-        return d.revenue + offline;
-    });
+    const totalRevenueData = allDates.map((d, i) => adRevenueData[i] + manualRevenueData[i]);
 
     return {
       toolbox: { feature: { saveAsImage: { show: true, title: 'Salvar' } }, right: '2%' },
@@ -390,38 +423,69 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, onBack }) => {
           let res = `<div class="font-bold mb-1 border-b border-slate-100 pb-1 text-slate-700">Dia ${params[0].axisValue}</div>`;
           params.forEach((param: any) => {
             const val = param.value !== undefined ? param.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'R$ 0,00';
-            res += `<div class="flex items-center gap-2 text-xs py-0.5">${param.marker} <span class="text-slate-500">${param.seriesName}:</span> <span class="font-bold text-slate-700">${val}</span></div>`;
+            
+            // Cor bolinha
+            const color = typeof param.color === 'string' ? param.color : (param.color?.colorStops?.[0]?.color || param.color); 
+
+            res += `<div class="flex items-center gap-2 text-xs py-0.5">
+               <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${color}"></span>
+               <span class="text-slate-500">${param.seriesName}:</span> <span class="font-bold text-slate-700">${val}</span>
+            </div>`;
           });
           return res;
         }
       },
-      legend: { data: ['Receita Total', 'Investimento', 'Receita Ads'], bottom: 0 },
-      grid: { left: '2%', right: '4%', bottom: '12%', top: '10%', containLabel: true },
-      xAxis: [{ type: 'category', boundaryGap: false, data: dates, axisLine: { show: false }, axisTick: { show: false } }],
+      legend: { 
+          data: ['Receita Total', 'Investimento', 'Receita Ads', 'Receita Manual'], 
+          bottom: 0,
+          itemGap: 20
+      },
+      grid: { left: '2%', right: '4%', bottom: '15%', top: '10%', containLabel: true },
+      xAxis: [{ 
+          type: 'category', 
+          boundaryGap: false, 
+          data: datesLabels, 
+          axisLine: { show: false }, 
+          axisTick: { show: false } 
+      }],
       yAxis: [{ type: 'value', splitLine: { lineStyle: { type: 'dashed' } } }],
       series: [
         {
           name: 'Receita Total',
           type: 'line',
           smooth: true,
-          lineStyle: { width: 3, color: '#10b981' },
-          areaStyle: { opacity: 0.2, color: '#10b981' },
-          data: blendedRevenue
+          lineStyle: { width: 3, color: '#10b981' }, // Emerald
+          areaStyle: { opacity: 0.1, color: '#10b981' },
+          data: totalRevenueData,
+          z: 1 // Fundo
         },
         {
           name: 'Investimento',
           type: 'line',
           smooth: true,
-          lineStyle: { width: 3, color: '#3b82f6' },
-          areaStyle: { opacity: 0.2, color: '#3b82f6' },
-          data: spend
+          lineStyle: { width: 3, color: '#3b82f6' }, // Blue
+          areaStyle: { opacity: 0.1, color: '#3b82f6' },
+          data: spendData,
+          z: 2
         },
         {
             name: 'Receita Ads',
             type: 'line',
             smooth: true,
-            lineStyle: { width: 1, color: '#94a3b8', type: 'dashed' },
-            data: adRevenue
+            lineStyle: { width: 2, color: '#94a3b8', type: 'dashed' }, // Slate
+            data: adRevenueData,
+            z: 3
+        },
+        {
+            name: 'Receita Manual',
+            type: 'line',
+            smooth: true,
+            symbol: 'circle',
+            symbolSize: 6,
+            lineStyle: { width: 2, color: '#8b5cf6', type: 'solid' }, // Violet Solid (mais visível)
+            itemStyle: { color: '#8b5cf6' },
+            data: manualRevenueData,
+            z: 4 // Topo absoluto para garantir visibilidade
         }
       ]
     };
@@ -548,6 +612,111 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, onBack }) => {
   }, [filteredStats.totalLeads, activities, deals, dateRange]);
 
 
+  // 5. Evolution Chart (Sales vs Quality) - NEW
+  const getQualityEvolutionOption = useMemo(() => {
+    if (!dateRange.start || !dateRange.end) return {};
+
+    // 1. Gerar array de datas completo
+    const allDates: string[] = [];
+    let curr = new Date(dateRange.start + 'T12:00:00');
+    const end = new Date(dateRange.end + 'T12:00:00');
+    
+    while (curr <= end) {
+        const year = curr.getFullYear();
+        const month = String(curr.getMonth() + 1).padStart(2, '0');
+        const day = String(curr.getDate()).padStart(2, '0');
+        allDates.push(`${year}-${month}-${day}`);
+        curr.setDate(curr.getDate() + 1);
+    }
+
+    const datesLabels = allDates.map(d => `${d.split('-')[2]}/${d.split('-')[1]}`); // DD/MM
+
+    // 2. Mapear Dados
+    const proposalData: number[] = [];
+    const salesData: number[] = [];
+    const qualityData: (number | null)[] = [];
+
+    allDates.forEach(date => {
+        // Propostas
+        const dayProposals = activities
+            .filter(a => a.date === date && a.type === 'proposal')
+            .reduce((acc, a) => acc + (a.quantity || 1), 0);
+        
+        // Vendas
+        const daySales = deals
+            .filter(d => d.date === date)
+            .reduce((acc, d) => acc + (d.quantity || 1), 0);
+
+        // Qualidade Média
+        const dayQualityActs = activities.filter(a => a.date === date && a.lead_quality_score);
+        let avgQuality = null;
+        if (dayQualityActs.length > 0) {
+            const sum = dayQualityActs.reduce((acc, a) => acc + (a.lead_quality_score || 0), 0);
+            avgQuality = Number((sum / dayQualityActs.length).toFixed(1));
+        }
+
+        proposalData.push(dayProposals);
+        salesData.push(daySales);
+        qualityData.push(avgQuality);
+    });
+
+    return {
+      toolbox: { feature: { saveAsImage: { show: true, title: 'Salvar' } }, right: '2%' },
+      tooltip: {
+        trigger: 'axis',
+        axisPointer: { type: 'cross' }
+      },
+      legend: { data: ['Propostas Enviadas', 'Vendas Realizadas', 'Qualidade Média Lead (1-5)'], bottom: 0 },
+      grid: { left: '2%', right: '4%', bottom: '15%', top: '15%', containLabel: true },
+      xAxis: [{ type: 'category', data: datesLabels, axisLine: { show: false }, axisTick: { show: false } }],
+      yAxis: [
+        { 
+            type: 'value', 
+            name: 'Volume', 
+            position: 'left',
+            splitLine: { show: true, lineStyle: { type: 'dashed' } }
+        },
+        { 
+            type: 'value', 
+            name: 'Score (1-5)', 
+            min: 0, 
+            max: 5, 
+            position: 'right',
+            splitLine: { show: false }
+        }
+      ],
+      series: [
+        {
+            name: 'Propostas Enviadas',
+            type: 'bar',
+            barGap: '10%',
+            itemStyle: { color: '#8b5cf6', borderRadius: [4, 4, 0, 0] }, // Violet
+            data: proposalData
+        },
+        {
+            name: 'Vendas Realizadas',
+            type: 'bar',
+            itemStyle: { color: '#10b981', borderRadius: [4, 4, 0, 0] }, // Emerald
+            data: salesData
+        },
+        {
+            name: 'Qualidade Média Lead (1-5)',
+            type: 'line',
+            yAxisIndex: 1,
+            smooth: true,
+            symbol: 'circle',
+            symbolSize: 8,
+            lineStyle: { width: 3, color: '#f59e0b' }, // Amber
+            itemStyle: { color: '#f59e0b', borderWidth: 2, borderColor: '#fff' },
+            connectNulls: true, // Conecta pontos se houver dias sem dados no meio
+            data: qualityData
+        }
+      ]
+    };
+
+  }, [activities, deals, dateRange]);
+
+
   const dateOptionLabels: Record<string, string> = {
     '7D': 'Últimos 7 dias',
     '14D': 'Últimos 14 dias',
@@ -571,19 +740,24 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, onBack }) => {
                         </button>
                     </div>
                 </div>
-                <div className="flex-1 overflow-y-auto pr-1 max-h-[400px] md:max-h-[550px] custom-scrollbar space-y-3">
-                    {deals.length > 0 ? deals.map(deal => (
-                        <div key={deal.id} className="p-3 bg-slate-50 rounded-lg border border-slate-100 flex justify-between items-center hover:bg-slate-100 transition-colors">
-                            <div>
-                                <p className="font-bold text-slate-700 text-xs md:text-sm">{deal.description}</p>
-                                <p className="text-[10px] text-slate-500">{new Date(deal.date).toLocaleDateString('pt-BR')}</p>
-                            </div>
-                            <div className="text-right">
-                                <p className="text-green-600 font-extrabold text-xs md:text-sm">R$ {deal.total_value.toLocaleString()}</p>
-                                <p className="text-[9px] text-slate-400">{deal.quantity} un.</p>
-                            </div>
+                {/* Visualização em GRID responsivo para ocupar a largura total */}
+                <div className="flex-1 overflow-y-auto pr-1 max-h-[400px] custom-scrollbar">
+                    {deals.length > 0 ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                            {deals.map(deal => (
+                                <div key={deal.id} className="p-3 bg-slate-50 rounded-lg border border-slate-100 flex justify-between items-center hover:bg-slate-100 transition-colors">
+                                    <div className="min-w-0">
+                                        <p className="font-bold text-slate-700 text-xs md:text-sm truncate" title={deal.description}>{deal.description}</p>
+                                        <p className="text-[10px] text-slate-500">{new Date(deal.date).toLocaleDateString('pt-BR')}</p>
+                                    </div>
+                                    <div className="text-right pl-2 shrink-0">
+                                        <p className="text-green-600 font-extrabold text-xs md:text-sm">R$ {deal.total_value.toLocaleString()}</p>
+                                        <p className="text-[9px] text-slate-400">{deal.quantity} un.</p>
+                                    </div>
+                                </div>
+                            ))}
                         </div>
-                    )) : (
+                    ) : (
                         <div className="h-full flex flex-col items-center justify-center text-slate-400 text-center italic text-xs border-2 border-dashed border-slate-100 rounded-lg p-6">
                             <p>Nenhuma venda registrada.</p>
                         </div>
@@ -603,46 +777,49 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, onBack }) => {
                         Atividades CRM
                     </h3>
                 </div>
-                <div className="flex-1 overflow-y-auto pr-1 max-h-[400px] md:max-h-[550px] custom-scrollbar space-y-3">
-                    {filteredActs.length > 0 ? filteredActs.map(act => (
-                        <div key={act.id} className="p-3 bg-slate-50 rounded-lg border border-slate-100 relative group hover:bg-white hover:shadow-sm transition-all">
-                            <div className="flex justify-between items-start mb-1">
-                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase ${act.type === 'meeting' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>
-                                    {act.type === 'meeting' ? 'Reunião' : 'Proposta'}
-                                </span>
-                                <span className="text-[10px] text-slate-400">{new Date(act.date).toLocaleDateString('pt-BR')}</span>
-                            </div>
-                            
-                            {/* --- Atualização: Exibir badge de lote se quantity > 1 --- */}
-                            {(act.quantity && act.quantity > 1) ? (
-                                <p className="font-bold text-slate-700 text-sm mb-0.5">
-                                    Resumo Semanal: <span className="text-indigo-600">{act.quantity} {act.type === 'meeting' ? 'Reuniões' : 'Propostas'}</span>
-                                </p>
-                            ) : (
-                                <p className="font-bold text-slate-700 text-sm mb-0.5">{act.prospect_name || 'Prospect sem nome'}</p>
-                            )}
-                            
-                            {act.type === 'proposal' && act.value && (
-                                <p className="text-xs font-bold text-emerald-600">Valor: R$ {act.value.toLocaleString('pt-BR')}</p>
-                            )}
-
-                            {/* --- Exibir Qualidade do Lead --- */}
-                            {act.lead_quality_score && (
-                                <div className="flex items-center gap-1 mt-1">
-                                    <span className="text-[10px] text-slate-500 font-medium">Qualidade Leads:</span>
-                                    <div className="flex">
-                                        {[1, 2, 3, 4, 5].map(s => (
-                                            <div key={s} className={`w-1.5 h-1.5 rounded-full mx-0.5 ${s <= act.lead_quality_score! ? 'bg-yellow-400' : 'bg-slate-200'}`}></div>
-                                        ))}
+                {/* Visualização em GRID responsivo */}
+                <div className="flex-1 overflow-y-auto pr-1 max-h-[400px] custom-scrollbar">
+                    {filteredActs.length > 0 ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                            {filteredActs.map(act => (
+                                <div key={act.id} className="p-3 bg-slate-50 rounded-lg border border-slate-100 relative group hover:bg-white hover:shadow-sm transition-all h-full">
+                                    <div className="flex justify-between items-start mb-1">
+                                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase ${act.type === 'meeting' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>
+                                            {act.type === 'meeting' ? 'Reunião' : 'Proposta'}
+                                        </span>
+                                        <span className="text-[10px] text-slate-400">{new Date(act.date).toLocaleDateString('pt-BR')}</span>
                                     </div>
+                                    
+                                    {(act.quantity && act.quantity > 1) ? (
+                                        <p className="font-bold text-slate-700 text-sm mb-0.5 truncate">
+                                            Resumo: <span className="text-indigo-600">{act.quantity} {act.type === 'meeting' ? 'Reuniões' : 'Propostas'}</span>
+                                        </p>
+                                    ) : (
+                                        <p className="font-bold text-slate-700 text-sm mb-0.5 truncate">{act.prospect_name || 'Prospect sem nome'}</p>
+                                    )}
+                                    
+                                    {act.type === 'proposal' && act.value && (
+                                        <p className="text-xs font-bold text-emerald-600">Valor: R$ {act.value.toLocaleString('pt-BR')}</p>
+                                    )}
+
+                                    {act.lead_quality_score && (
+                                        <div className="flex items-center gap-1 mt-1">
+                                            <span className="text-[10px] text-slate-500 font-medium">Qualidade Leads:</span>
+                                            <div className="flex">
+                                                {[1, 2, 3, 4, 5].map(s => (
+                                                    <div key={s} className={`w-1.5 h-1.5 rounded-full mx-0.5 ${s <= act.lead_quality_score! ? 'bg-yellow-400' : 'bg-slate-200'}`}></div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                    
+                                    {act.notes && (
+                                        <p className="text-[10px] text-slate-500 mt-1 italic line-clamp-2">"{act.notes}"</p>
+                                    )}
                                 </div>
-                            )}
-                            
-                            {act.notes && (
-                                <p className="text-[10px] text-slate-500 mt-1 italic line-clamp-2">"{act.notes}"</p>
-                            )}
+                            ))}
                         </div>
-                    )) : (
+                    ) : (
                         <div className="h-full flex flex-col items-center justify-center text-slate-400 text-center italic text-xs border-2 border-dashed border-slate-100 rounded-lg p-6">
                             <p>Nenhuma atividade encontrada neste período.</p>
                             <p className="mt-1">Use o link público para registrar.</p>
@@ -653,6 +830,11 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, onBack }) => {
         );
     }
   };
+
+  const filteredClients = clients.filter(c => 
+    c.company.toLowerCase().includes(clientSearchTerm.toLowerCase()) || 
+    c.name.toLowerCase().includes(clientSearchTerm.toLowerCase())
+  );
 
   return (
     <div className="space-y-6 animate-fade-in pb-10">
@@ -667,11 +849,63 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, onBack }) => {
             <button onClick={onBack} className="text-xs md:text-sm text-slate-500 hover:text-indigo-600 flex items-center gap-1 font-medium">
                <ChevronLeft size={16} /> Dashboard
             </button>
-            <div className="flex items-center gap-3">
-              <h1 className="text-xl md:text-2xl font-bold text-slate-800 truncate max-w-[200px] md:max-w-none">{currentClient.company}</h1>
-              <span className={`px-2 py-0.5 rounded-full text-[10px] md:text-xs font-semibold ${currentClient.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-600'}`}>
-                {currentClient.status.toUpperCase()}
-              </span>
+            <div className="flex items-center gap-3 relative" ref={dropdownRef}>
+                {/* --- SELETOR DE CLIENTE (DROPDOWN) --- */}
+                <button 
+                  onClick={() => setIsClientDropdownOpen(!isClientDropdownOpen)}
+                  className="flex items-center gap-2 group hover:opacity-80 transition-opacity"
+                >
+                    <h1 className="text-xl md:text-2xl font-bold text-slate-800 truncate max-w-[200px] md:max-w-none group-hover:text-indigo-600 transition-colors">
+                        {currentClient.company}
+                    </h1>
+                    <ChevronDown size={20} className={`text-slate-400 transition-transform duration-200 group-hover:text-indigo-500 ${isClientDropdownOpen ? 'rotate-180' : ''}`} />
+                </button>
+                <span className={`px-2 py-0.5 rounded-full text-[10px] md:text-xs font-semibold ${currentClient.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-600'}`}>
+                    {currentClient.status.toUpperCase()}
+                </span>
+
+                {/* --- MENU DROPDOWN LISTA DE CLIENTES --- */}
+                {isClientDropdownOpen && (
+                    <div className="absolute top-full left-0 mt-2 w-72 bg-white rounded-xl shadow-xl border border-slate-200 z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                        <div className="p-3 border-b border-slate-100 bg-slate-50">
+                            <div className="relative">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+                                <input 
+                                    type="text" 
+                                    autoFocus
+                                    placeholder="Buscar cliente..." 
+                                    className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                    value={clientSearchTerm}
+                                    onChange={(e) => setClientSearchTerm(e.target.value)}
+                                />
+                            </div>
+                        </div>
+                        <div className="max-h-64 overflow-y-auto">
+                            {filteredClients.length > 0 ? filteredClients.map(c => (
+                                <button
+                                    key={c.id}
+                                    onClick={() => {
+                                        if (onClientSwitch) {
+                                            onClientSwitch(c);
+                                            setIsClientDropdownOpen(false);
+                                            setClientSearchTerm('');
+                                        }
+                                    }}
+                                    className={`w-full text-left px-4 py-3 text-sm hover:bg-slate-50 flex items-center justify-between border-b border-slate-50 last:border-0 ${c.id === currentClient.id ? 'bg-indigo-50/50' : ''}`}
+                                >
+                                    <div>
+                                        <p className={`font-bold ${c.id === currentClient.id ? 'text-indigo-700' : 'text-slate-700'}`}>{c.company}</p>
+                                        <p className="text-xs text-slate-400">{c.name}</p>
+                                    </div>
+                                    {c.id === currentClient.id && <Check size={16} className="text-indigo-600" />}
+                                    {c.status === 'paused' && <span className="w-2 h-2 rounded-full bg-slate-300 ml-2" title="Pausado"></span>}
+                                </button>
+                            )) : (
+                                <div className="p-4 text-center text-xs text-slate-400">Nenhum cliente encontrado.</div>
+                            )}
+                        </div>
+                    </div>
+                )}
             </div>
           </div>
           
@@ -785,88 +1019,94 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, onBack }) => {
       {/* AI Insights Feed - Agora com onDismiss */}
       {showInsights && <InsightsFeed insights={insights} loading={loadingInsights} onDismiss={handleDismissInsight} />}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        {/* Main Chart Area */}
-        {loading || !chartsReady ? (
-          <ChartSkeleton />
-        ) : (
-          <div className="lg:col-span-2 bg-white p-4 md:p-6 rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
-            <div className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
-              <h3 className="text-base md:text-lg font-bold text-slate-800">Performance Detalhada</h3>
-              
-              <div className="bg-slate-100 p-1 rounded-lg flex gap-1 w-full sm:w-auto overflow-x-auto no-scrollbar">
-                <button 
-                  onClick={() => setActiveChart('finance')}
-                  className={`flex-1 sm:flex-none px-3 py-1.5 text-[10px] font-bold rounded-md transition-all whitespace-nowrap uppercase ${activeChart === 'finance' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}
-                >
-                  Financeiro
-                </button>
-                <button 
-                  onClick={() => setActiveChart('acquisition')}
-                  className={`flex-1 sm:flex-none px-3 py-1.5 text-[10px] font-bold rounded-md transition-all whitespace-nowrap uppercase ${activeChart === 'acquisition' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}
-                >
-                  Aquisição
-                </button>
-                <button 
-                  onClick={() => setActiveChart('marketing_funnel')}
-                  className={`flex-1 sm:flex-none px-3 py-1.5 text-[10px] font-bold rounded-md transition-all whitespace-nowrap uppercase ${activeChart === 'marketing_funnel' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}
-                >
-                  Funil de Marketing
-                </button>
-                {currentClient.crm_enabled && (
-                    <button 
-                      onClick={() => setActiveChart('commercial_funnel')}
-                      className={`flex-1 sm:flex-none px-3 py-1.5 text-[10px] font-bold rounded-md transition-all whitespace-nowrap uppercase ${activeChart === 'commercial_funnel' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500'}`}
-                    >
-                      Funil de Vendas
-                    </button>
-                )}
-              </div>
-            </div>
+      {/* Main Chart Area (Agora em Grid 2 Colunas) */}
+      {loading || !chartsReady ? (
+        <ChartSkeleton />
+      ) : (
+        <div className="space-y-6">
             
-            <div className="w-full flex-1 min-h-[400px]">
-               {activeChart === 'finance' && (
-                 <ReactECharts 
-                    option={getFinanceOption} 
-                    style={{ height: '100%', width: '100%', minHeight: '400px' }} 
-                    opts={{ renderer: 'svg' }}
-                    notMerge={true}
-                 />
-               )}
-               {activeChart === 'acquisition' && (
-                 <ReactECharts 
-                    option={getAcquisitionOption} 
-                    style={{ height: '100%', width: '100%', minHeight: '400px' }} 
-                    opts={{ renderer: 'svg' }}
-                    notMerge={true}
-                 />
-               )}
-               {activeChart === 'marketing_funnel' && (
-                 <ReactECharts 
-                    option={getMarketingFunnelOption} 
-                    style={{ height: '100%', width: '100%', minHeight: '400px' }} 
-                    opts={{ renderer: 'svg' }}
-                    notMerge={true}
-                 />
-               )}
-               {activeChart === 'commercial_funnel' && (
-                 <ReactECharts 
-                    option={getCommercialFunnelOption} 
-                    style={{ height: '100%', width: '100%', minHeight: '400px' }} 
-                    opts={{ renderer: 'svg' }}
-                    notMerge={true}
-                 />
-               )}
-            </div>
-          </div>
-        )}
+            {/* Linha 1: Financeiro e Aquisição */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="bg-white p-4 md:p-6 rounded-xl border border-slate-200 shadow-sm h-full">
+                    <h3 className="text-base md:text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                        <DollarSign size={18} className="text-emerald-500" />
+                        Financeiro
+                    </h3>
+                    <ReactECharts 
+                        option={getFinanceOption} 
+                        style={{ height: '350px', width: '100%' }} 
+                        opts={{ renderer: 'svg' }}
+                        notMerge={true}
+                    />
+                </div>
 
-        {/* CRM / Vendas Side Panel */}
-        {loading ? (
-          <SalesSkeleton />
-        ) : (
-          <div className="bg-white p-4 md:p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col h-[500px] md:h-[650px] lg:h-auto">
+                <div className="bg-white p-4 md:p-6 rounded-xl border border-slate-200 shadow-sm h-full">
+                    <h3 className="text-base md:text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                        <Users size={18} className="text-orange-500" />
+                        Aquisição & CPL
+                    </h3>
+                    <ReactECharts 
+                        option={getAcquisitionOption} 
+                        style={{ height: '350px', width: '100%' }} 
+                        opts={{ renderer: 'svg' }}
+                        notMerge={true}
+                    />
+                </div>
+            </div>
+
+            {/* Linha 2: Funis */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="bg-white p-4 md:p-6 rounded-xl border border-slate-200 shadow-sm h-full">
+                    <h3 className="text-base md:text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                        <Target size={18} className="text-blue-500" />
+                        Funil de Marketing
+                    </h3>
+                    <ReactECharts 
+                        option={getMarketingFunnelOption} 
+                        style={{ height: '350px', width: '100%' }} 
+                        opts={{ renderer: 'svg' }}
+                        notMerge={true}
+                    />
+                </div>
+
+                {currentClient.crm_enabled && (
+                    <div className="bg-white p-4 md:p-6 rounded-xl border border-slate-200 shadow-sm h-full">
+                        <h3 className="text-base md:text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                            <Briefcase size={18} className="text-purple-500" />
+                            Funil Comercial
+                        </h3>
+                        <ReactECharts 
+                            option={getCommercialFunnelOption} 
+                            style={{ height: '350px', width: '100%' }} 
+                            opts={{ renderer: 'svg' }}
+                            notMerge={true}
+                        />
+                    </div>
+                )}
+            </div>
+
+            {/* Linha 3: Evolução Comercial & Qualidade (Novo) */}
+            <div className="bg-white p-4 md:p-6 rounded-xl border border-slate-200 shadow-sm">
+                <h3 className="text-base md:text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                    <Activity size={18} className="text-amber-500" />
+                    Evolução Comercial & Qualidade
+                </h3>
+                <ReactECharts 
+                    option={getQualityEvolutionOption} 
+                    style={{ height: '350px', width: '100%' }} 
+                    opts={{ renderer: 'svg' }}
+                    notMerge={true}
+                />
+            </div>
+
+        </div>
+      )}
+
+      {/* CRM / Vendas Panel (Movido para baixo) */}
+      {loading ? (
+        <SalesSkeleton />
+      ) : (
+        <div className="bg-white p-4 md:p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col w-full">
              
              {/* Header com Abas (Se CRM Ativo) */}
              <div className="flex justify-between items-start mb-4">
@@ -902,9 +1142,8 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, onBack }) => {
              
              {renderSidePanelContent()}
              
-          </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Campaigns Table */}
       {loading ? (
