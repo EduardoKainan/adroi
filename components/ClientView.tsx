@@ -226,13 +226,10 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
         clientService.getClientMetrics(currentClient.id, startDateStr, endDateStr),
         contractService.getClientContract(currentClient.id),
         dealService.getDeals(currentClient.id), // Retorna todos, filtramos localmente para a lista lateral
-        aiAnalysisService.getSavedInsights(currentClient.id)
+        aiAnalysisService.getSavedInsights(currentClient.id),
+        // Adicionamos sempre o fetch de activities, independente do flag, para garantir que se houver dados, mostre.
+        commercialService.getActivities(currentClient.id)
       ];
-
-      // Se CRM Ativo, busca atividades (Reuniões/Propostas)
-      if (currentClient.crm_enabled) {
-          promises.push(commercialService.getActivities(currentClient.id));
-      }
 
       const results = await Promise.all(promises);
       
@@ -241,12 +238,7 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
       setContract(results[2]);
       setDeals(results[3]);
       setInsights(results[4]);
-
-      if (currentClient.crm_enabled && results[5]) {
-          setActivities(results[5]);
-      } else {
-          setActivities([]);
-      }
+      setActivities(results[5] || []);
       
     } catch (error: any) {
       console.error("Failed to load client details:", error);
@@ -342,8 +334,9 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
         const periodActivities = activities.filter(a => a.date >= dateRange.start && a.date <= dateRange.end);
         
         // --- ATUALIZAÇÃO: Cálculo usando 'quantity' ---
-        const meetings = periodActivities.filter(a => a.type === 'meeting').reduce((acc, a) => acc + (a.quantity || 1), 0);
-        const proposals = periodActivities.filter(a => a.type === 'proposal').reduce((acc, a) => acc + (a.quantity || 1), 0);
+        // Se quantity for undefined, assume 1. Se for 0, usa 0.
+        const meetings = periodActivities.filter(a => a.type === 'meeting').reduce((acc, a) => acc + (a.quantity !== undefined ? a.quantity : 1), 0);
+        const proposals = periodActivities.filter(a => a.type === 'proposal').reduce((acc, a) => acc + (a.quantity !== undefined ? a.quantity : 1), 0);
         const proposalValue = periodActivities.filter(a => a.type === 'proposal').reduce((acc, p) => acc + (p.value || 0), 0);
         
         text += `\n\n🎯 Funil Comercial\n`;
@@ -567,8 +560,8 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
     const filteredActivities = activities.filter(a => a.date >= dateRange.start && a.date <= dateRange.end);
     
     // --- ATUALIZAÇÃO: Cálculo usando 'quantity' ---
-    const meetings = filteredActivities.filter(a => a.type === 'meeting').reduce((acc, a) => acc + (a.quantity || 1), 0);
-    const proposals = filteredActivities.filter(a => a.type === 'proposal').reduce((acc, a) => acc + (a.quantity || 1), 0);
+    const meetings = filteredActivities.filter(a => a.type === 'meeting').reduce((acc, a) => acc + (a.quantity !== undefined ? a.quantity : 1), 0);
+    const proposals = filteredActivities.filter(a => a.type === 'proposal').reduce((acc, a) => acc + (a.quantity !== undefined ? a.quantity : 1), 0);
     const leads = filteredStats.totalLeads; // Leads totais vindos do Marketing
     const dealsClosed = deals.filter(d => d.date >= dateRange.start && d.date <= dateRange.end).length;
 
@@ -612,7 +605,7 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
   }, [filteredStats.totalLeads, activities, deals, dateRange]);
 
 
-  // 5. Evolution Chart (Sales vs Quality) - NEW
+  // 5. Evolution Chart (Sales vs Quality) - FIXED LOGIC
   const getQualityEvolutionOption = useMemo(() => {
     if (!dateRange.start || !dateRange.end) return {};
 
@@ -640,18 +633,19 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
         // Propostas
         const dayProposals = activities
             .filter(a => a.date === date && a.type === 'proposal')
-            .reduce((acc, a) => acc + (a.quantity || 1), 0);
+            .reduce((acc, a) => acc + (a.quantity !== undefined ? a.quantity : 1), 0);
         
         // Vendas
         const daySales = deals
             .filter(d => d.date === date)
-            .reduce((acc, d) => acc + (d.quantity || 1), 0);
+            .reduce((acc, d) => acc + (d.quantity !== undefined ? d.quantity : 1), 0);
 
         // Qualidade Média
-        const dayQualityActs = activities.filter(a => a.date === date && a.lead_quality_score);
+        // Correção: Garantir que lead_quality_score seja tratado como número e maior que 0
+        const dayQualityActs = activities.filter(a => a.date === date && a.lead_quality_score && a.lead_quality_score > 0);
         let avgQuality = null;
         if (dayQualityActs.length > 0) {
-            const sum = dayQualityActs.reduce((acc, a) => acc + (a.lead_quality_score || 0), 0);
+            const sum = dayQualityActs.reduce((acc, a) => acc + Number(a.lead_quality_score || 0), 0);
             avgQuality = Number((sum / dayQualityActs.length).toFixed(1));
         }
 
@@ -790,7 +784,7 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
                                         <span className="text-[10px] text-slate-400">{new Date(act.date).toLocaleDateString('pt-BR')}</span>
                                     </div>
                                     
-                                    {(act.quantity && act.quantity > 1) ? (
+                                    {(act.quantity !== undefined && act.quantity >= 0) ? (
                                         <p className="font-bold text-slate-700 text-sm mb-0.5 truncate">
                                             Resumo: <span className="text-indigo-600">{act.quantity} {act.type === 'meeting' ? 'Reuniões' : 'Propostas'}</span>
                                         </p>
