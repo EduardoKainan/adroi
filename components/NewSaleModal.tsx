@@ -1,12 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Save, Loader2, DollarSign, Calendar, ShoppingBag } from 'lucide-react';
 import { dealService } from '../services/dealService';
+import { Deal } from '../types';
 
 interface NewSaleModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
   clientId: string;
+  dealToEdit?: Deal | null; // Prop opcional para edição
 }
 
 // Helper para data local YYYY-MM-DD
@@ -18,14 +20,36 @@ const getTodayLocal = () => {
     return `${year}-${month}-${day}`;
 };
 
-export const NewSaleModal: React.FC<NewSaleModalProps> = ({ isOpen, onClose, onSuccess, clientId }) => {
+export const NewSaleModal: React.FC<NewSaleModalProps> = ({ isOpen, onClose, onSuccess, clientId, dealToEdit }) => {
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
-    date: getTodayLocal(), // Uso do helper para garantir data local
+    date: getTodayLocal(), 
     description: '',
     quantity: 1,
-    unit_value: ''
+    unit_value: '' as string | number
   });
+
+  // Efeito para preencher o formulário se estiver editando
+  useEffect(() => {
+    if (isOpen) {
+        if (dealToEdit) {
+            setFormData({
+                date: dealToEdit.date,
+                description: dealToEdit.description,
+                quantity: dealToEdit.quantity || 1,
+                unit_value: dealToEdit.unit_value || (dealToEdit.total_value / (dealToEdit.quantity || 1))
+            });
+        } else {
+            // Reset para nova venda
+            setFormData({
+                date: getTodayLocal(),
+                description: '',
+                quantity: 1,
+                unit_value: ''
+            });
+        }
+    }
+  }, [isOpen, dealToEdit]);
 
   if (!isOpen) return null;
 
@@ -33,17 +57,28 @@ export const NewSaleModal: React.FC<NewSaleModalProps> = ({ isOpen, onClose, onS
     e.preventDefault();
     setLoading(true);
     try {
-      await dealService.createDeal({
-        client_id: clientId,
-        date: formData.date,
-        description: formData.description,
-        quantity: Number(formData.quantity),
-        unit_value: Number(formData.unit_value)
-      });
+      if (dealToEdit) {
+        // Atualizar
+        await dealService.updateDeal(dealToEdit.id, {
+            date: formData.date,
+            description: formData.description,
+            quantity: Number(formData.quantity),
+            unit_value: Number(formData.unit_value)
+        });
+      } else {
+        // Criar
+        await dealService.createDeal({
+            client_id: clientId,
+            date: formData.date,
+            description: formData.description,
+            quantity: Number(formData.quantity),
+            unit_value: Number(formData.unit_value)
+        });
+      }
+      
       onSuccess();
       onClose();
-      // Reset sensitive fields, keeping date current
-      setFormData(prev => ({ ...prev, date: getTodayLocal(), description: '', quantity: 1, unit_value: '' }));
+      // Reset handled by useEffect on next open
     } catch (error: any) {
       console.error('Erro ao registrar venda:', error);
       
@@ -73,8 +108,8 @@ export const NewSaleModal: React.FC<NewSaleModalProps> = ({ isOpen, onClose, onS
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all scale-100">
         <div className="flex justify-between items-center p-6 border-b border-slate-100 bg-slate-50">
           <div>
-            <h3 className="text-xl font-bold text-slate-800">Registrar Venda</h3>
-            <p className="text-xs text-slate-500">Adicione vendas manuais/offline</p>
+            <h3 className="text-xl font-bold text-slate-800">{dealToEdit ? 'Editar Venda' : 'Registrar Venda'}</h3>
+            <p className="text-xs text-slate-500">{dealToEdit ? 'Alterar dados do registro' : 'Adicione vendas manuais/offline'}</p>
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition-colors">
             <X size={24} />
@@ -159,7 +194,7 @@ export const NewSaleModal: React.FC<NewSaleModalProps> = ({ isOpen, onClose, onS
               className="flex-1 py-2.5 bg-indigo-600 rounded-lg text-white font-medium hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-70"
             >
               {loading ? <Loader2 className="animate-spin" size={20} /> : <Save size={20} />}
-              Salvar Venda
+              {dealToEdit ? 'Salvar Alterações' : 'Salvar Venda'}
             </button>
           </div>
         </form>

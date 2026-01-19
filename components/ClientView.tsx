@@ -5,7 +5,7 @@ import { contractService } from '../services/contractService';
 import { dealService } from '../services/dealService';
 import { commercialService } from '../services/commercialService';
 import { aiAnalysisService } from '../services/aiAnalysisService';
-import { DollarSign, Target, TrendingUp, Calendar, Download, Loader2, Users, ShoppingBag, Plus, Copy, Check, BarChart, ChevronLeft, ChevronDown, Sparkles, PieChart, Link, ExternalLink, FileText, Briefcase, Search, Activity } from 'lucide-react';
+import { DollarSign, Target, TrendingUp, Calendar, Download, Loader2, Users, ShoppingBag, Plus, Copy, Check, BarChart, ChevronLeft, ChevronDown, Sparkles, PieChart, Link, ExternalLink, FileText, Briefcase, Search, Activity, Trash2, PenLine } from 'lucide-react';
 import { NewSaleModal } from './NewSaleModal';
 import { InsightsFeed } from './InsightsFeed';
 // Importação do ECharts
@@ -123,6 +123,7 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
   
   // UI State
   const [isSaleModalOpen, setIsSaleModalOpen] = useState(false);
+  const [dealToEdit, setDealToEdit] = useState<Deal | null>(null); // Estado para edição
   const [copied, setCopied] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
   const [crmListTab, setCrmListTab] = useState<'deals' | 'activities'>('deals');
@@ -252,6 +253,30 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
     // Recarrega apenas as deals para atualizar a lista e o cálculo
     const dealsData = await dealService.getDeals(currentClient.id);
     setDeals(dealsData);
+    setDealToEdit(null); // Limpa edição
+  };
+
+  const handleEditDeal = (deal: Deal) => {
+    setDealToEdit(deal);
+    setIsSaleModalOpen(true);
+  };
+
+  const handleDeleteDeal = async (dealId: string) => {
+    if (confirm("Tem certeza que deseja excluir esta venda?")) {
+        try {
+            await dealService.deleteDeal(dealId);
+            const dealsData = await dealService.getDeals(currentClient.id);
+            setDeals(dealsData);
+        } catch (error) {
+            console.error("Erro ao deletar venda", error);
+            alert("Erro ao excluir venda.");
+        }
+    }
+  };
+
+  const handleOpenNewSale = () => {
+    setDealToEdit(null);
+    setIsSaleModalOpen(true);
   };
 
   // --- Função para chamar IA e Salvar ---
@@ -729,7 +754,7 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
                         Vendas
                     </h3>
                     <div className="flex gap-2">
-                        <button onClick={() => setIsSaleModalOpen(true)} className="flex items-center gap-1 text-xs font-bold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition-colors">
+                        <button onClick={handleOpenNewSale} className="flex items-center gap-1 text-xs font-bold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition-colors">
                             <Plus size={14} /> Nova
                         </button>
                     </div>
@@ -739,14 +764,32 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
                     {deals.length > 0 ? (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                             {deals.map(deal => (
-                                <div key={deal.id} className="p-3 bg-slate-50 rounded-lg border border-slate-100 flex justify-between items-center hover:bg-slate-100 transition-colors">
-                                    <div className="min-w-0">
+                                <div key={deal.id} className="p-3 bg-slate-50 rounded-lg border border-slate-100 flex justify-between items-center hover:bg-slate-100 transition-colors group relative">
+                                    <div className="min-w-0 flex-1">
                                         <p className="font-bold text-slate-700 text-xs md:text-sm truncate" title={deal.description}>{deal.description}</p>
                                         <p className="text-[10px] text-slate-500">{new Date(deal.date).toLocaleDateString('pt-BR')}</p>
                                     </div>
-                                    <div className="text-right pl-2 shrink-0">
+                                    <div className="text-right pl-2 shrink-0 mr-6 group-hover:mr-2 transition-all">
                                         <p className="text-green-600 font-extrabold text-xs md:text-sm">R$ {deal.total_value.toLocaleString()}</p>
                                         <p className="text-[9px] text-slate-400">{deal.quantity} un.</p>
+                                    </div>
+                                    
+                                    {/* Action Buttons (Edit/Delete) - Absolute Positioned on Hover */}
+                                    <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity bg-white pl-1">
+                                        <button 
+                                            onClick={() => handleEditDeal(deal)}
+                                            className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-full transition-colors"
+                                            title="Editar"
+                                        >
+                                            <PenLine size={14} />
+                                        </button>
+                                        <button 
+                                            onClick={() => handleDeleteDeal(deal.id)}
+                                            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors"
+                                            title="Excluir"
+                                        >
+                                            <Trash2 size={14} />
+                                        </button>
                                     </div>
                                 </div>
                             ))}
@@ -832,7 +875,13 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
 
   return (
     <div className="space-y-6 animate-fade-in pb-10">
-      <NewSaleModal isOpen={isSaleModalOpen} onClose={() => setIsSaleModalOpen(false)} onSuccess={handleSaleAdded} clientId={currentClient.id} />
+      <NewSaleModal 
+        isOpen={isSaleModalOpen} 
+        onClose={() => setIsSaleModalOpen(false)} 
+        onSuccess={handleSaleAdded} 
+        clientId={currentClient.id} 
+        dealToEdit={dealToEdit} // Passar a prop de edição
+      />
 
       {/* Header */}
       {loading ? (
