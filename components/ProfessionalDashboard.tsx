@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Project, Task, Goal, TaskCategory, Client } from '../types'; 
 import { Plus, MoreHorizontal, Calendar, Clock, ArrowRight, ArrowLeft, Trash2, PenLine, Target, AlertCircle, Briefcase, TrendingUp, CheckCircle2, GripVertical, X, ListTodo, ChevronRight } from 'lucide-react';
@@ -179,7 +180,7 @@ export const ProfessionalDashboard: React.FC<ProfessionalDashboardProps> = ({ pr
     : 0;
 
   return (
-    <div className="flex flex-col h-[calc(100vh-6rem)] animate-in fade-in duration-500 gap-6 relative">
+    <div className="flex flex-col min-h-screen md:min-h-0 md:h-[calc(100vh-6rem)] animate-in fade-in duration-500 gap-6 relative">
       
       <NewTaskModal 
         isOpen={isTaskModalOpen}
@@ -242,10 +243,10 @@ export const ProfessionalDashboard: React.FC<ProfessionalDashboardProps> = ({ pr
       </div>
 
       {/* --- Área Principal (Grid Dividido) --- */}
-      <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <div className="flex-1 md:min-h-0 grid grid-cols-1 lg:grid-cols-12 gap-6">
         
         {/* COLUNA ESQUERDA: Kanban (8 cols) */}
-        <div className="lg:col-span-8 xl:col-span-9 flex flex-col min-h-0">
+        <div className="lg:col-span-8 xl:col-span-9 flex flex-col md:min-h-0">
           <div className="flex items-center justify-between mb-4 shrink-0">
             <h3 className="font-bold text-slate-800 flex items-center gap-2">
               <AlertCircle size={18} className="text-indigo-600" />
@@ -261,8 +262,13 @@ export const ProfessionalDashboard: React.FC<ProfessionalDashboardProps> = ({ pr
             </div>
           </div>
 
-          <div className="flex-1 overflow-x-auto pb-2">
-            <div className="flex h-full gap-4 min-w-[800px]">
+          <div className="flex-1 md:min-h-0">
+            {/* 
+                ALTERAÇÃO AQUI: 
+                - Mobile: flex com overflow-x-auto (Scroll Horizontal)
+                - Desktop: grid normal
+            */}
+            <div className="flex overflow-x-auto md:grid md:grid-cols-4 gap-4 md:h-full pb-4 md:pb-0 snap-x snap-mandatory md:snap-none custom-scrollbar">
               {columns.map((col) => {
                 const colTasks = tasks.filter(t => t.category === col.id);
                 const isOver = dragOverColumn === col.id;
@@ -270,7 +276,9 @@ export const ProfessionalDashboard: React.FC<ProfessionalDashboardProps> = ({ pr
                 return (
                   <div 
                     key={col.id} 
-                    className={`flex-1 min-w-[200px] rounded-xl border transition-all duration-200 flex flex-col max-h-full
+                    className={`flex flex-col rounded-xl border transition-all duration-200 
+                      flex-shrink-0 w-[85vw] sm:w-[320px] md:w-auto snap-center
+                      h-[400px] md:h-full
                       ${col.bgClass} 
                       ${isOver ? 'ring-2 ring-indigo-400 ring-offset-2 scale-[1.01]' : col.borderClass}
                     `}
@@ -396,7 +404,7 @@ export const ProfessionalDashboard: React.FC<ProfessionalDashboardProps> = ({ pr
         </div>
 
         {/* COLUNA DIREITA: Sidebar Tática (4 cols) */}
-        <div className="lg:col-span-4 xl:col-span-3 flex flex-col gap-6 overflow-y-auto pr-1">
+        <div className="lg:col-span-4 xl:col-span-3 flex flex-col gap-6 md:overflow-y-auto md:pr-1">
           
           {/* Cronograma */}
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 shrink-0">

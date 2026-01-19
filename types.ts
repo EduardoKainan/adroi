@@ -5,8 +5,24 @@ export enum UserRole {
   CLIENT = 'client'
 }
 
+export interface Organization {
+  id: string;
+  name: string;
+  slug?: string;
+  created_at: string;
+}
+
+export interface UserProfile {
+  id: string;
+  organization_id: string;
+  role: 'admin' | 'manager' | 'client';
+  full_name?: string;
+  email?: string;
+}
+
 export interface Client {
   id: string;
+  organization_id?: string; // Novo campo SaaS
   name: string;
   company: string;
   email?: string;
@@ -30,7 +46,8 @@ export interface Client {
 }
 
 export interface Insight {
-  id?: string; // ID do banco de dados (opcional pois o AI gera sem ID inicialmente)
+  id?: string;
+  organization_id?: string;
   type: 'critical' | 'opportunity' | 'warning' | 'info';
   title: string;
   description: string;
@@ -41,28 +58,27 @@ export interface Insight {
 export interface CommercialActivity {
   id: string;
   client_id: string;
+  organization_id?: string;
   type: 'meeting' | 'proposal';
   date: string;
   prospect_name?: string;
   value?: number;
   notes?: string;
-  
-  // Novos campos para Check-in Semanal
-  quantity?: number; // Quantidade em lote (ex: 12 reuniões)
-  lead_quality_score?: number; // 1 a 5
-  
+  quantity?: number;
+  lead_quality_score?: number;
   created_at?: string;
 }
 
 export interface Campaign {
   id: string;
+  organization_id?: string;
   name: string;
   status: 'ACTIVE' | 'PAUSED' | 'ARCHIVED';
   objective: string;
   spend: number;
   revenue: number;
   leads: number;
-  purchases: number; // Renomeado de sales para purchases
+  purchases: number; 
   roas: number;
   impressions: number;
   clicks: number;
@@ -70,6 +86,7 @@ export interface Campaign {
 
 export interface Contract {
   id: string;
+  organization_id?: string;
   client_id: string;
   type: 'fixed' | 'commission' | 'hybrid';
   monthly_value: number;
@@ -77,7 +94,6 @@ export interface Contract {
   start_date: string;
   end_date: string;
   status: 'active' | 'expired' | 'cancelled' | 'pending';
-  // UI computed property
   days_remaining?: number;
 }
 
@@ -91,6 +107,7 @@ export interface DailyMetric {
 
 export interface Deal {
   id: string;
+  organization_id?: string;
   client_id: string;
   date: string;
   description: string;
@@ -100,24 +117,25 @@ export interface Deal {
   created_at: string;
 }
 
-// Interfaces para o Dashboard Profissional (Produtividade)
 export type TaskCategory = 'do_now' | 'schedule' | 'delegate' | 'delete';
 
 export interface Task {
   id: string;
+  organization_id?: string;
   title: string;
   completed: boolean;
   priority: 'low' | 'medium' | 'high';
-  category: TaskCategory; // Campo novo para Matriz de Eisenhower
+  category: TaskCategory; 
   durationMinutes?: number; 
   projectId?: string;
   dueDate?: string;
-  clientId?: string; // Foreign Key para o banco
-  clientName?: string; // Opcional para contexto no card (Join)
+  clientId?: string; 
+  clientName?: string; 
 }
 
 export interface Project {
   id: string;
+  organization_id?: string;
   title: string;
   status: 'active' | 'paused' | 'completed';
   progress: number;
@@ -126,9 +144,9 @@ export interface Project {
 
 export interface Goal {
   id: string;
+  organization_id?: string;
   title: string;
   status: 'on_track' | 'at_risk' | 'completed';
 }
 
-// For UI State Management
 export type ViewState = 'DASHBOARD' | 'CLIENT_DETAIL' | 'SETTINGS' | 'TASKS';
