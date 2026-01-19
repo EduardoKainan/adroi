@@ -5,6 +5,7 @@ import { contractService } from '../services/contractService';
 import { Client, Contract } from '../types';
 import { Search, Plus, MoreVertical, TrendingUp, AlertTriangle, Loader2, RefreshCw, Copy, Check, Calendar, ChevronRight, Trash2, PauseCircle, PlayCircle, PenLine, ChevronDown, DollarSign, Users, PieChart } from 'lucide-react';
 import { NewClientModal } from './NewClientModal';
+import { OnboardingGuide } from './OnboardingGuide';
 
 interface DashboardProps {
   onSelectClient: (client: Client) => void;
@@ -26,6 +27,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectClient }) => {
   // Modal & Edit State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [clientToEdit, setClientToEdit] = useState<Client | null>(null);
+
+  // Onboarding State
+  const [showOnboarding, setShowOnboarding] = useState(false);
 
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [copyingId, setCopyingId] = useState<string | null>(null);
@@ -72,6 +76,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectClient }) => {
       
       setClients(clientsData);
 
+      // Lógica de Onboarding: Se carregou e não tem clientes, e o usuário não fechou manualmente antes
+      if (clientsData.length === 0) {
+         // Verifica localStorage para não mostrar se o usuário já dispensou explicitamente
+         const hasSeenOnboarding = localStorage.getItem('adroi_onboarding_seen');
+         if (!hasSeenOnboarding) {
+             setShowOnboarding(true);
+         }
+      }
+
       const contractsMap: Record<string, Contract> = {};
       contractsData.forEach(c => {
         contractsMap[c.client_id] = c;
@@ -114,6 +127,16 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectClient }) => {
   const handleOpenNewClientModal = () => {
     setClientToEdit(null);
     setIsModalOpen(true);
+  };
+
+  const handleCloseOnboarding = () => {
+      setShowOnboarding(false);
+      localStorage.setItem('adroi_onboarding_seen', 'true');
+  };
+
+  const handleOnboardingAction = () => {
+      handleCloseOnboarding();
+      handleOpenNewClientModal();
   };
 
   const handleEditClient = (e: React.MouseEvent, client: Client) => {
@@ -228,6 +251,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectClient }) => {
 
   return (
     <div className="space-y-6 md:space-y-8 animate-fade-in pb-10">
+      
+      {/* Onboarding Wizard */}
+      <OnboardingGuide 
+        isOpen={showOnboarding} 
+        onClose={handleCloseOnboarding} 
+        onStartAction={handleOnboardingAction} 
+      />
+
       <NewClientModal 
         isOpen={isModalOpen} 
         onClose={() => setIsModalOpen(false)} 
@@ -529,11 +560,17 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectClient }) => {
           </div>
         ) : (
           !loading && (
-             <div className="p-20 text-center border-2 border-dashed border-slate-200 rounded-xl bg-slate-50">
-               <p className="text-slate-500 font-medium">Nenhum cliente encontrado.</p>
-               <button onClick={handleOpenNewClientModal} className="mt-3 text-indigo-600 font-bold hover:underline">
-                  + Cadastrar primeiro cliente
+             <div className="p-20 text-center border-2 border-dashed border-slate-200 rounded-xl bg-slate-50 flex flex-col items-center">
+               <p className="text-slate-500 font-medium mb-3">Sua carteira está vazia.</p>
+               <button 
+                  onClick={handleOpenNewClientModal} 
+                  className="px-6 py-2 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 transition-colors shadow-sm"
+               >
+                  + Cadastrar Primeiro Cliente
                </button>
+               <p className="text-xs text-slate-400 mt-4 max-w-xs mx-auto">
+                 Cadastre um cliente para começar a acompanhar métricas de Ads e Offline.
+               </p>
              </div>
           )
         )}
