@@ -12,7 +12,6 @@ export const getLocalDateString = (date: Date): string => {
 
 export const clientService = {
   // Busca pública apenas para validar o nome da empresa no formulário externo
-  // Adicionado crm_enabled para renderização condicional do formulário
   async getClientPublicInfo(clientId: string) {
     const { data, error } = await supabase
       .from('clients')
@@ -121,7 +120,7 @@ export const clientService = {
       target_roas: clientData.target_roas,
       target_cpa: clientData.target_cpa,
       budget_limit: clientData.budget_limit,
-      crm_enabled: clientData.crm_enabled, // Novo campo
+      crm_enabled: clientData.crm_enabled,
       status: 'active' as const,
       created_at: new Date().toISOString(),
       last_updated: new Date().toISOString()
@@ -142,14 +141,16 @@ export const clientService = {
       }
 
       // --- WEBHOOK TRIGGER (INTEGRAÇÃO N8N) ---
-      // Dispara o webhook para a URL fornecida
-      const webhookUrl = 'https://n8n.zapgestao.app.br/webhook-test/cadastroNovoCliente';
-      console.log('🚀 Iniciando disparo do webhook para:', webhookUrl);
+      const webhookUrl = 'https://n8nback.zapgestao.app.br/webhook/cadastroNovoCliente';
+      console.log('🚀 Iniciando disparo do webhook (Standard JSON) para:', webhookUrl);
 
+      // Agora usamos fetch padrão, esperando que o servidor aceite CORS
       fetch(webhookUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        keepalive: true, // Importante: Garante que a requisição termine mesmo se a página mudar/fechar modal
+        headers: { 
+            'Content-Type': 'application/json' 
+        },
+        keepalive: true,
         body: JSON.stringify({
           event: 'new_client_created',
           client: data,
@@ -159,14 +160,13 @@ export const clientService = {
       })
       .then(response => {
         if (response.ok) {
-           console.log('✅ Webhook disparado com sucesso! Status:', response.status);
+           console.log('✅ Webhook recebido pelo n8n com sucesso! Status:', response.status);
         } else {
-           console.warn('⚠️ Webhook disparado, mas servidor retornou erro. Status:', response.status);
+           console.warn('⚠️ Webhook enviado, mas servidor n8n retornou erro:', response.status);
         }
       })
       .catch(err => {
-        console.error('❌ ERRO AO DISPARAR WEBHOOK:', err);
-        // Dica: Se aparecer erro de CORS no console, é configuração necessária no servidor do n8n
+        console.error('❌ ERRO AO DISPARAR WEBHOOK (Possível erro de CORS se não configurado):', err);
       });
       // ----------------------------------------------
 
@@ -184,22 +184,20 @@ export const clientService = {
     }
   },
 
-  // Update Client Info (Name, Company, Email, AdAccount, Goals)
+  // Update Client Info
   async updateClient(clientId: string, updates: Partial<Client>) {
     const payload = {
       name: updates.name,
       company: updates.company,
       email: updates.email,
       ad_account_id: updates.ad_account_id,
-      // Novos campos de meta
       target_roas: updates.target_roas,
       target_cpa: updates.target_cpa,
       budget_limit: updates.budget_limit,
-      crm_enabled: updates.crm_enabled, // Novo campo
+      crm_enabled: updates.crm_enabled,
       last_updated: new Date().toISOString()
     };
     
-    // Remove undefined keys
     Object.keys(payload).forEach(key => (payload as any)[key] === undefined && delete (payload as any)[key]);
 
     const { error } = await supabase
@@ -210,7 +208,7 @@ export const clientService = {
     if (error) throw error;
   },
 
-  // Update Client Status (Pause/Activate)
+  // Update Client Status
   async updateClientStatus(clientId: string, status: 'active' | 'paused' | 'churned') {
     const { error } = await supabase
       .from('clients')
@@ -220,17 +218,15 @@ export const clientService = {
     if (error) throw error;
   },
 
-  // Delete Client with Manual Cascade
+  // Delete Client
   async deleteClient(clientId: string) {
     try {
       await supabase.from('tasks').delete().eq('client_id', clientId);
       await supabase.from('deals').delete().eq('client_id', clientId);
       await supabase.from('contracts').delete().eq('client_id', clientId);
-      
-      // Tentativa de limpar commercial_activities se existir
       try {
         await supabase.from('commercial_activities').delete().eq('client_id', clientId);
-      } catch (e) { /* ignore se tabela nao existir */ }
+      } catch (e) { }
 
       const { data: campaigns } = await supabase
         .from('campaigns')
@@ -255,9 +251,8 @@ export const clientService = {
     }
   },
 
-  // Fetch campaigns for a specific client AND aggregate their metrics filtered by date
+  // Get Campaigns
   async getCampaigns(clientId: string, startDateStr: string, endDateStr: string) {
-    // 1. Buscar metadados das campanhas
     const { data: campaigns, error } = await supabase
       .from('campaigns')
       .select('*')
@@ -268,7 +263,6 @@ export const clientService = {
 
     const campaignIds = campaigns.map(c => c.id);
 
-    // 2. Buscar métricas acumuladas de todas essas campanhas no período
     const { data: metrics, error: metricsError } = await supabase
       .from('campaign_metrics')
       .select('*')
@@ -278,7 +272,6 @@ export const clientService = {
 
     if (metricsError) throw metricsError;
 
-    // 3. Agregar (Somar) as métricas por campanha
     const metricsMap: Record<string, any> = {};
     
     metrics?.forEach((m: any) => {
@@ -293,11 +286,9 @@ export const clientService = {
       metricsMap[m.campaign_id].purchases += Number(m.purchases || 0); 
     });
 
-    // 4. Combinar Campanha + Métricas Calculadas
     const result = campaigns.map(c => {
       const stats = metricsMap[c.id] || { spend: 0, revenue: 0, leads: 0, impressions: 0, clicks: 0, purchases: 0 };
       const roas = stats.spend > 0 ? stats.revenue / stats.spend : 0;
-      
       return {
         ...c,
         spend: stats.spend,
@@ -313,7 +304,7 @@ export const clientService = {
     return result.sort((a, b) => b.spend - a.spend) as Campaign[];
   },
 
-  // Fetch daily metrics aggregated by date for the charts (Client Level)
+  // Get Metrics
   async getClientMetrics(clientId: string, startDateStr: string, endDateStr: string) {
     const { data: campaigns } = await supabase
       .from('campaigns')
