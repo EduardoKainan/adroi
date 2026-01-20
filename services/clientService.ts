@@ -1,3 +1,4 @@
+
 import { supabase } from '../lib/supabase';
 import { Client, Campaign, DailyMetric } from '../types';
 
@@ -139,6 +140,35 @@ export const clientService = {
       if (error) {
         throw error;
       }
+
+      // --- WEBHOOK TRIGGER (INTEGRAÇÃO N8N) ---
+      // Dispara o webhook para a URL fornecida
+      const webhookUrl = 'https://n8n.zapgestao.app.br/webhook-test/cadastroNovoCliente';
+      console.log('🚀 Iniciando disparo do webhook para:', webhookUrl);
+
+      fetch(webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        keepalive: true, // Importante: Garante que a requisição termine mesmo se a página mudar/fechar modal
+        body: JSON.stringify({
+          event: 'new_client_created',
+          client: data,
+          timestamp: new Date().toISOString(),
+          source: 'adroi_saas_frontend'
+        })
+      })
+      .then(response => {
+        if (response.ok) {
+           console.log('✅ Webhook disparado com sucesso! Status:', response.status);
+        } else {
+           console.warn('⚠️ Webhook disparado, mas servidor retornou erro. Status:', response.status);
+        }
+      })
+      .catch(err => {
+        console.error('❌ ERRO AO DISPARAR WEBHOOK:', err);
+        // Dica: Se aparecer erro de CORS no console, é configuração necessária no servidor do n8n
+      });
+      // ----------------------------------------------
 
       return {
         ...data,

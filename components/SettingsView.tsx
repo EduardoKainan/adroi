@@ -4,10 +4,11 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { 
   User, Building2, CreditCard, Users, Shield, 
-  Save, Loader2, CheckCircle, LogOut, Mail, Lock
+  Save, Loader2, CheckCircle, LogOut, Mail, Lock, Plus, Trash2, Clock
 } from 'lucide-react';
+import { UserProfile, OrganizationInvite } from '../types';
 
-type SettingsTab = 'profile' | 'organization' | 'team' | 'billing' | 'integrations';
+type SettingsTab = 'profile' | 'organization' | 'team' | 'billing';
 
 export const SettingsView: React.FC = () => {
   const { user, profile, organization, signOut } = useAuth();
@@ -19,17 +20,58 @@ export const SettingsView: React.FC = () => {
   const [fullName, setFullName] = useState(profile?.full_name || '');
   const [orgName, setOrgName] = useState(organization?.name || '');
 
+  // Team States
+  const [teamMembers, setTeamMembers] = useState<UserProfile[]>([]);
+  const [invites, setInvites] = useState<OrganizationInvite[]>([]);
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteRole, setInviteRole] = useState<'admin' | 'manager'>('manager');
+
   // Sincronizar estados iniciais
   useEffect(() => {
     if (profile?.full_name) setFullName(profile.full_name);
     if (organization?.name) setOrgName(organization.name);
   }, [profile, organization]);
 
+  // Carregar Time ao entrar na aba
+  useEffect(() => {
+    if (activeTab === 'team' && organization?.id) {
+        fetchTeamData();
+    }
+  }, [activeTab, organization?.id]);
+
   const isAdmin = profile?.role === 'admin';
 
   const showSuccess = (msg: string) => {
     setSuccessMsg(msg);
     setTimeout(() => setSuccessMsg(null), 3000);
+  };
+
+  const fetchTeamData = async () => {
+    if (!organization?.id) return;
+    try {
+        // 1. Membros Ativos
+        const { data: members, error: membersError } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('organization_id', organization.id);
+        
+        if (membersError) throw membersError;
+        setTeamMembers(members as UserProfile[]);
+
+        // 2. Convites Pendentes (Apenas se for admin)
+        if (isAdmin) {
+            const { data: invitesData, error: invitesError } = await supabase
+                .from('organization_invites')
+                .select('*')
+                .eq('organization_id', organization.id);
+            
+            if (!invitesError) setInvites(invitesData as OrganizationInvite[]);
+        }
+
+    } catch (error) {
+        console.error("Erro ao carregar time:", error);
+    }
   };
 
   const handleUpdateProfile = async (e: React.FormEvent) => {
@@ -69,6 +111,45 @@ export const SettingsView: React.FC = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSendInvite = async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!organization?.id) return;
+      setLoading(true);
+
+      try {
+          const { error } = await supabase
+            .from('organization_invites')
+            .insert([{
+                organization_id: organization.id,
+                email: inviteEmail,
+                role: inviteRole
+            }]);
+
+          if (error) throw error;
+
+          showSuccess(`Convite enviado para ${inviteEmail}`);
+          setInviteEmail('');
+          setShowInviteModal(false);
+          fetchTeamData(); // Recarrega a lista
+
+      } catch (error: any) {
+          alert(`Erro ao convidar: ${error.message}`);
+      } finally {
+          setLoading(false);
+      }
+  };
+
+  const handleRevokeInvite = async (inviteId: string) => {
+      if(!confirm("Tem certeza que deseja cancelar este convite?")) return;
+      try {
+          const { error } = await supabase.from('organization_invites').delete().eq('id', inviteId);
+          if (error) throw error;
+          fetchTeamData();
+      } catch (error: any) {
+          alert("Erro ao remover convite: " + error.message);
+      }
   };
 
   const handlePasswordReset = async () => {
@@ -202,8 +283,11 @@ export const SettingsView: React.FC = () => {
             <p className="text-sm text-slate-500">Membros com acesso ao workspace da <b>{organization?.name}</b>.</p>
         </div>
         {isAdmin && (
-            <button className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-indigo-700 transition-colors">
-                + Convidar Membro
+            <button 
+                onClick={() => setShowInviteModal(true)}
+                className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-indigo-700 transition-colors flex items-center gap-2"
+            >
+                <Plus size={16} /> Convidar Membro
             </button>
         )}
       </div>
@@ -215,37 +299,121 @@ export const SettingsView: React.FC = () => {
                      <th className="px-6 py-4 font-medium text-slate-500">Nome</th>
                      <th className="px-6 py-4 font-medium text-slate-500">Email</th>
                      <th className="px-6 py-4 font-medium text-slate-500">Função</th>
-                     <th className="px-6 py-4 font-medium text-slate-500 text-right">Ações</th>
+                     <th className="px-6 py-4 font-medium text-slate-500 text-right">Status</th>
                  </tr>
              </thead>
              <tbody className="divide-y divide-slate-100">
-                 {/* Current User */}
-                 <tr className="bg-indigo-50/30">
-                     <td className="px-6 py-4 font-bold text-slate-700 flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-xs">
-                            {profile?.full_name?.substring(0,2).toUpperCase()}
-                        </div>
-                        {profile?.full_name} <span className="text-[10px] bg-slate-200 px-1.5 py-0.5 rounded text-slate-600">Você</span>
-                     </td>
-                     <td className="px-6 py-4 text-slate-600">{user?.email}</td>
-                     <td className="px-6 py-4">
-                        <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${profile?.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
-                            {profile?.role}
-                        </span>
-                     </td>
-                     <td className="px-6 py-4 text-right text-slate-400 text-xs italic">
-                         -
-                     </td>
-                 </tr>
-                 {/* Placeholder for future members */}
+                 {/* 1. Membros Ativos */}
+                 {teamMembers.map(member => (
+                    <tr key={member.id} className="group hover:bg-slate-50 transition-colors">
+                        <td className="px-6 py-4 font-bold text-slate-700 flex items-center gap-2">
+                           <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-xs uppercase">
+                               {member.full_name?.substring(0,2) || 'US'}
+                           </div>
+                           {member.full_name} 
+                           {member.id === user?.id && <span className="text-[10px] bg-slate-200 px-1.5 py-0.5 rounded text-slate-600">Você</span>}
+                        </td>
+                        <td className="px-6 py-4 text-slate-600">{member.email}</td>
+                        <td className="px-6 py-4">
+                           <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${member.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+                               {member.role === 'admin' ? 'Administrador' : 'Gerente'}
+                           </span>
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                           <span className="inline-flex items-center gap-1 px-2 py-1 rounded text-[10px] font-bold bg-green-50 text-green-700">
+                               <CheckCircle size={12} /> Ativo
+                           </span>
+                        </td>
+                    </tr>
+                 ))}
+
+                 {/* 2. Convites Pendentes */}
+                 {invites.map(invite => (
+                     <tr key={invite.id} className="bg-slate-50/50">
+                        <td className="px-6 py-4 font-medium text-slate-400 italic flex items-center gap-2">
+                           <div className="w-8 h-8 rounded-full bg-slate-200 text-slate-400 flex items-center justify-center">
+                               <Mail size={14} />
+                           </div>
+                           (Pendente)
+                        </td>
+                        <td className="px-6 py-4 text-slate-500">{invite.email}</td>
+                        <td className="px-6 py-4">
+                           <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${invite.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'} opacity-70`}>
+                               {invite.role === 'admin' ? 'Administrador' : 'Gerente'}
+                           </span>
+                        </td>
+                        <td className="px-6 py-4 text-right flex items-center justify-end gap-2">
+                           <span className="inline-flex items-center gap-1 px-2 py-1 rounded text-[10px] font-bold bg-yellow-50 text-yellow-700">
+                               <Clock size={12} /> Aguardando
+                           </span>
+                           {isAdmin && (
+                               <button 
+                                onClick={() => handleRevokeInvite(invite.id)}
+                                className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
+                                title="Cancelar convite"
+                               >
+                                   <Trash2 size={14} />
+                               </button>
+                           )}
+                        </td>
+                     </tr>
+                 ))}
              </tbody>
          </table>
-         <div className="p-8 text-center text-slate-400 text-sm">
-            <Users size={32} className="mx-auto mb-2 opacity-50" />
-            <p>Convide gestores para colaborar na sua agência.</p>
-            <p className="text-xs opacity-70 mt-1">(Funcionalidade de convites em breve)</p>
-         </div>
       </div>
+
+      {/* Modal de Convite (Inline para simplicidade) */}
+      {showInviteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-fade-in">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden p-6 animate-in zoom-in-95 duration-200">
+                <h3 className="text-xl font-bold text-slate-800 mb-1">Convidar Novo Membro</h3>
+                <p className="text-sm text-slate-500 mb-6">O usuário receberá acesso ao workspace assim que se cadastrar com este email.</p>
+                
+                <form onSubmit={handleSendInvite} className="space-y-4">
+                    <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Email do Colaborador</label>
+                        <input 
+                            required
+                            type="email" 
+                            className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                            placeholder="colaborador@exemplo.com"
+                            value={inviteEmail}
+                            onChange={(e) => setInviteEmail(e.target.value)}
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Permissão</label>
+                        <select 
+                            className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
+                            value={inviteRole}
+                            onChange={(e) => setInviteRole(e.target.value as 'admin' | 'manager')}
+                        >
+                            <option value="manager">Gerente (Pode gerenciar clientes/projetos)</option>
+                            <option value="admin">Administrador (Acesso total)</option>
+                        </select>
+                    </div>
+
+                    <div className="flex gap-3 pt-2">
+                        <button 
+                            type="button" 
+                            onClick={() => setShowInviteModal(false)}
+                            className="flex-1 py-2 border border-slate-300 rounded-lg text-slate-700 font-medium hover:bg-slate-50"
+                        >
+                            Cancelar
+                        </button>
+                        <button 
+                            type="submit" 
+                            disabled={loading}
+                            className="flex-1 py-2 bg-indigo-600 rounded-lg text-white font-medium hover:bg-indigo-700 disabled:opacity-70 flex items-center justify-center gap-2"
+                        >
+                            {loading ? <Loader2 size={18} className="animate-spin" /> : <Mail size={18} />}
+                            Enviar Convite
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+      )}
     </div>
   );
 

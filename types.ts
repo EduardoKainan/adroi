@@ -20,6 +20,15 @@ export interface UserProfile {
   email?: string;
 }
 
+export interface OrganizationInvite {
+  id: string;
+  organization_id: string;
+  email: string;
+  role: 'admin' | 'manager';
+  created_at: string;
+  status: 'pending' | 'accepted';
+}
+
 export interface Client {
   id: string;
   organization_id?: string; // Novo campo SaaS
