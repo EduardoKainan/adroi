@@ -24,11 +24,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     // 1. Check active session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      if (error) {
+        // Se houver erro na sessão (ex: Invalid Refresh Token), forçamos logout local
+        console.warn("Sessão inválida ou expirada:", error.message);
+        signOut();
+        setLoading(false);
+        return;
+      }
+      
       setSession(session);
       setUser(session?.user ?? null);
-      if (session?.user) fetchProfile(session.user.id);
-      else setLoading(false);
+      if (session?.user) {
+        fetchProfile(session.user.id);
+      } else {
+        setLoading(false);
+      }
     });
 
     // 2. Listen for auth changes
@@ -71,6 +82,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     } catch (error) {
       console.error('Error fetching user profile:', error);
+      // Opcional: Se falhar em buscar o perfil (ex: erro de rede), apenas paramos o loading
+      // e o usuário verá um estado talvez incompleto, mas não travado.
     } finally {
       setLoading(false);
     }
@@ -78,6 +91,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signOut = async () => {
     await supabase.auth.signOut();
+    setSession(null);
+    setUser(null);
     setProfile(null);
     setOrganization(null);
   };

@@ -142,13 +142,17 @@ export const clientService = {
 
       // --- WEBHOOK TRIGGER (INTEGRAÇÃO N8N) ---
       const webhookUrl = 'https://n8nback.zapgestao.app.br/webhook/cadastroNovoCliente';
-      console.log('🚀 Iniciando disparo do webhook (Standard JSON) para:', webhookUrl);
+      console.log('🚀 Iniciando disparo do webhook (Modo No-CORS) para:', webhookUrl);
 
-      // Agora usamos fetch padrão, esperando que o servidor aceite CORS
+      // Usamos mode: 'no-cors' para evitar bloqueios do navegador quando o servidor n8n
+      // não retorna os headers Access-Control-Allow-Origin corretos.
+      // O Content-Type deve ser text/plain para ser considerado "simple request" em alguns casos,
+      // mas enviamos o JSON stringify no corpo. O n8n receberá um body string.
       fetch(webhookUrl, {
         method: 'POST',
+        mode: 'no-cors', 
         headers: { 
-            'Content-Type': 'application/json' 
+            'Content-Type': 'text/plain' 
         },
         keepalive: true,
         body: JSON.stringify({
@@ -158,15 +162,13 @@ export const clientService = {
           source: 'adroi_saas_frontend'
         })
       })
-      .then(response => {
-        if (response.ok) {
-           console.log('✅ Webhook recebido pelo n8n com sucesso! Status:', response.status);
-        } else {
-           console.warn('⚠️ Webhook enviado, mas servidor n8n retornou erro:', response.status);
-        }
+      .then(() => {
+        // Em no-cors, a resposta é opaca (status 0), não temos como saber se foi 200 OK via JS.
+        // Mas sabemos que o browser enviou a requisição.
+        console.log('✅ Webhook disparado (Resposta opaca devido a no-cors)');
       })
       .catch(err => {
-        console.error('❌ ERRO AO DISPARAR WEBHOOK (Possível erro de CORS se não configurado):', err);
+        console.error('❌ ERRO DE REDE AO DISPARAR WEBHOOK:', err);
       });
       // ----------------------------------------------
 
