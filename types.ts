@@ -10,6 +10,7 @@ export interface Organization {
   name: string;
   slug?: string;
   created_at: string;
+  meta_api_token?: string; // Novo campo para o Token da API do Facebook/Meta
 }
 
 export interface UserProfile {

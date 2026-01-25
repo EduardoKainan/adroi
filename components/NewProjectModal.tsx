@@ -1,7 +1,9 @@
+
 import React, { useState, useEffect } from 'react';
 import { X, Save, Loader2, Calendar, Briefcase } from 'lucide-react';
 import { taskService } from '../services/taskService';
 import { Project } from '../types';
+import { toast } from 'sonner';
 
 interface NewProjectModalProps {
   isOpen: boolean;
@@ -53,6 +55,7 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClos
           status: formData.status as 'active' | 'paused' | 'completed',
           progress: formData.progress
         });
+        toast.success("Projeto atualizado.");
       } else {
         await taskService.createProject({
           title: formData.title,
@@ -60,12 +63,13 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClos
           status: formData.status as 'active' | 'paused' | 'completed',
           progress: formData.progress
         });
+        toast.success("Projeto criado com sucesso.");
       }
       onSuccess();
       onClose();
     } catch (error) {
       console.error('Error saving project:', error);
-      alert('Erro ao salvar projeto.');
+      toast.error('Erro ao salvar projeto.');
     } finally {
       setLoading(false);
     }

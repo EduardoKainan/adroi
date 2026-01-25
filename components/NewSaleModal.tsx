@@ -1,7 +1,9 @@
+
 import React, { useState, useEffect } from 'react';
 import { X, Save, Loader2, DollarSign, Calendar, ShoppingBag } from 'lucide-react';
 import { dealService } from '../services/dealService';
 import { Deal } from '../types';
+import { toast } from 'sonner';
 
 interface NewSaleModalProps {
   isOpen: boolean;
@@ -65,6 +67,7 @@ export const NewSaleModal: React.FC<NewSaleModalProps> = ({ isOpen, onClose, onS
             quantity: Number(formData.quantity),
             unit_value: Number(formData.unit_value)
         });
+        toast.success("Venda atualizada com sucesso.");
       } else {
         // Criar
         await dealService.createDeal({
@@ -74,6 +77,7 @@ export const NewSaleModal: React.FC<NewSaleModalProps> = ({ isOpen, onClose, onS
             quantity: Number(formData.quantity),
             unit_value: Number(formData.unit_value)
         });
+        toast.success("Venda registrada com sucesso.");
       }
       
       onSuccess();
@@ -84,7 +88,7 @@ export const NewSaleModal: React.FC<NewSaleModalProps> = ({ isOpen, onClose, onS
       
       // Tratamento específico para erro de Schema Cache (PGRST204)
       if (error?.code === 'PGRST204' || (error?.message && error.message.includes('schema cache'))) {
-         alert('ERRO DE BANCO DE DADOS (PGRST204):\n\nA tabela "deals" existe mas faltam colunas (quantity) ou o cache do Supabase está desatualizado.\n\nSOLUÇÃO: Vá no SQL Editor do Supabase e execute o script "fix_missing_columns.sql".');
+         toast.error('ERRO DE BANCO DE DADOS (PGRST204). Verifique se as colunas existem.');
          setLoading(false);
          return;
       }
@@ -95,7 +99,7 @@ export const NewSaleModal: React.FC<NewSaleModalProps> = ({ isOpen, onClose, onS
       else if (error instanceof Error) message = error.message;
       else try { message = JSON.stringify(error); } catch(e) {}
 
-      alert(`Erro ao registrar venda: ${message}. Verifique o console para mais detalhes.`);
+      toast.error(`Erro ao registrar venda: ${message}. Verifique o console para mais detalhes.`);
     } finally {
       setLoading(false);
     }

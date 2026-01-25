@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { Client, Contract, Campaign, DailyMetric, Deal, Insight, CommercialActivity } from '../types';
 import { clientService, getLocalDateString } from '../services/clientService';
@@ -8,9 +9,9 @@ import { aiAnalysisService } from '../services/aiAnalysisService';
 import { DollarSign, Target, TrendingUp, Calendar, Download, Loader2, Users, ShoppingBag, Plus, Copy, Check, BarChart, ChevronLeft, ChevronDown, Sparkles, PieChart, Link, ExternalLink, FileText, Briefcase, Search, Activity, Trash2, PenLine } from 'lucide-react';
 import { NewSaleModal } from './NewSaleModal';
 import { InsightsFeed } from './InsightsFeed';
-// Importação do ECharts
 import ReactECharts from 'echarts-for-react';
 import * as echarts from 'echarts';
+import { toast } from 'sonner';
 
 interface ClientViewProps {
   client: Client;
@@ -243,6 +244,7 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
       
     } catch (error: any) {
       console.error("Failed to load client details:", error);
+      toast.error("Falha ao carregar detalhes do cliente.");
     } finally {
       setLoading(false);
       setTimeout(() => setChartsReady(true), 150);
@@ -267,9 +269,10 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
             await dealService.deleteDeal(dealId);
             const dealsData = await dealService.getDeals(currentClient.id);
             setDeals(dealsData);
+            toast.success("Venda excluída.");
         } catch (error) {
             console.error("Erro ao deletar venda", error);
-            alert("Erro ao excluir venda.");
+            toast.error("Erro ao excluir venda.");
         }
     }
   };
@@ -305,11 +308,14 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
            await aiAnalysisService.saveInsights(currentClient.id, generatedInsights);
            const saved = await aiAnalysisService.getSavedInsights(currentClient.id);
            setInsights(saved);
+           toast.success("Análise de IA concluída.");
        } else {
            setInsights(generatedInsights);
+           toast.error("IA Indisponível no momento.");
        }
      } catch (e) {
        console.error("Erro ao gerar insights", e);
+       toast.error("Erro ao gerar análise.");
      } finally {
        setLoadingInsights(false);
      }

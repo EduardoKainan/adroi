@@ -4,9 +4,10 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { 
   User, Building2, CreditCard, Users, Shield, 
-  Save, Loader2, CheckCircle, LogOut, Mail, Lock, Plus, Trash2, Clock
+  Save, Loader2, CheckCircle, LogOut, Mail, Lock, Plus, Trash2, Clock, Eye, EyeOff, Key
 } from 'lucide-react';
 import { UserProfile, OrganizationInvite } from '../types';
+import { toast } from 'sonner';
 
 type SettingsTab = 'profile' | 'organization' | 'team' | 'billing';
 
@@ -14,11 +15,12 @@ export const SettingsView: React.FC = () => {
   const { user, profile, organization, signOut } = useAuth();
   const [activeTab, setActiveTab] = useState<SettingsTab>('profile');
   const [loading, setLoading] = useState(false);
-  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   // Form States
   const [fullName, setFullName] = useState(profile?.full_name || '');
   const [orgName, setOrgName] = useState(organization?.name || '');
+  const [metaToken, setMetaToken] = useState(organization?.meta_api_token || '');
+  const [showMetaToken, setShowMetaToken] = useState(false);
 
   // Team States
   const [teamMembers, setTeamMembers] = useState<UserProfile[]>([]);
@@ -31,6 +33,8 @@ export const SettingsView: React.FC = () => {
   useEffect(() => {
     if (profile?.full_name) setFullName(profile.full_name);
     if (organization?.name) setOrgName(organization.name);
+    // Nota: O token pode ser null, então checamos se é undefined para não sobrescrever caso o usuário esteja digitando e algo dispare o effect (embora deps controlem)
+    if (organization?.meta_api_token !== undefined) setMetaToken(organization.meta_api_token || '');
   }, [profile, organization]);
 
   // Carregar Time ao entrar na aba
@@ -41,11 +45,6 @@ export const SettingsView: React.FC = () => {
   }, [activeTab, organization?.id]);
 
   const isAdmin = profile?.role === 'admin';
-
-  const showSuccess = (msg: string) => {
-    setSuccessMsg(msg);
-    setTimeout(() => setSuccessMsg(null), 3000);
-  };
 
   const fetchTeamData = async () => {
     if (!organization?.id) return;
@@ -84,9 +83,9 @@ export const SettingsView: React.FC = () => {
         .eq('id', user?.id);
 
       if (error) throw error;
-      showSuccess('Perfil atualizado com sucesso!');
+      toast.success('Perfil atualizado com sucesso!');
     } catch (error: any) {
-      alert(`Erro: ${error.message}`);
+      toast.error(`Erro: ${error.message}`);
     } finally {
       setLoading(false);
     }
@@ -98,16 +97,32 @@ export const SettingsView: React.FC = () => {
     
     setLoading(true);
     try {
-      const { error } = await supabase
+      // Importante: .select() garante que o retorno contenha os dados atualizados.
+      // Se RLS bloquear, data será vazio/null.
+      const { data, error } = await supabase
         .from('organizations')
-        .update({ name: orgName })
-        .eq('id', organization.id);
+        .update({ 
+          name: orgName,
+          meta_api_token: metaToken 
+        })
+        .eq('id', organization.id)
+        .select();
 
       if (error) throw error;
-      showSuccess('Informações da empresa atualizadas!');
+
+      if (!data || data.length === 0) {
+        throw new Error("Nenhuma alteração salva. Verifique se você é Administrador.");
+      }
+
+      toast.success('Informações da empresa atualizadas!');
+      
+      // Opcional: Recarregar a página para garantir que o contexto global (AuthContext) pegue o novo token
+      // Isso evita que o campo fique vazio se o usuário mudar de aba e voltar.
+      setTimeout(() => window.location.reload(), 1500);
+
     } catch (error: any) {
       console.error(error);
-      alert(`Erro ao atualizar organização. Verifique se você é Admin.\n\nDetalhe: ${error.message}`);
+      toast.error(`Erro ao atualizar organização: ${error.message}`);
     } finally {
       setLoading(false);
     }
@@ -129,13 +144,13 @@ export const SettingsView: React.FC = () => {
 
           if (error) throw error;
 
-          showSuccess(`Convite enviado para ${inviteEmail}`);
+          toast.success(`Convite enviado para ${inviteEmail}`);
           setInviteEmail('');
           setShowInviteModal(false);
           fetchTeamData(); // Recarrega a lista
 
       } catch (error: any) {
-          alert(`Erro ao convidar: ${error.message}`);
+          toast.error(`Erro ao convidar: ${error.message}`);
       } finally {
           setLoading(false);
       }
@@ -147,8 +162,9 @@ export const SettingsView: React.FC = () => {
           const { error } = await supabase.from('organization_invites').delete().eq('id', inviteId);
           if (error) throw error;
           fetchTeamData();
+          toast.success("Convite cancelado.");
       } catch (error: any) {
-          alert("Erro ao remover convite: " + error.message);
+          toast.error("Erro ao remover convite: " + error.message);
       }
   };
 
@@ -158,8 +174,8 @@ export const SettingsView: React.FC = () => {
         const { error } = await supabase.auth.resetPasswordForEmail(user.email, {
             redirectTo: window.location.origin,
         });
-        if (error) alert('Erro ao enviar email: ' + error.message);
-        else alert('Email de redefinição enviado! Verifique sua caixa de entrada.');
+        if (error) toast.error('Erro ao enviar email: ' + error.message);
+        else toast.success('Email de redefinição enviado! Verifique sua caixa de entrada.');
     }
   };
 
@@ -236,19 +252,43 @@ export const SettingsView: React.FC = () => {
 
       <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-6">
          {isAdmin ? (
-            <form onSubmit={handleUpdateOrg} className="space-y-4 max-w-lg">
+            <form onSubmit={handleUpdateOrg} className="space-y-6 max-w-lg">
                 <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">Nome da Empresa / Agência</label>
                     <div className="relative">
-                    <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                    <input 
-                        type="text" 
-                        className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
-                        value={orgName}
-                        onChange={(e) => setOrgName(e.target.value)}
-                    />
+                      <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                      <input 
+                          type="text" 
+                          className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                          value={orgName}
+                          onChange={(e) => setOrgName(e.target.value)}
+                      />
                     </div>
                     <p className="text-xs text-slate-400 mt-1">Este nome aparecerá no cabeçalho dos relatórios públicos.</p>
+                </div>
+
+                <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Token da API do Facebook (Meta Ads)</label>
+                    <div className="relative">
+                      <Key className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                      <input 
+                          type={showMetaToken ? "text" : "password"}
+                          className="w-full pl-10 pr-12 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none font-mono text-sm"
+                          value={metaToken}
+                          onChange={(e) => setMetaToken(e.target.value)}
+                          placeholder="EAAB..."
+                      />
+                      <button 
+                        type="button"
+                        onClick={() => setShowMetaToken(!showMetaToken)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                      >
+                        {showMetaToken ? <EyeOff size={18} /> : <Eye size={18} />}
+                      </button>
+                    </div>
+                    <p className="text-xs text-slate-400 mt-1">
+                      Token de acesso de longa duração para integração com N8N/Webhook.
+                    </p>
                 </div>
                 
                 <div className="pt-2">
@@ -511,13 +551,6 @@ export const SettingsView: React.FC = () => {
 
        {/* Content Area */}
        <div className="flex-1 min-w-0">
-          {successMsg && (
-            <div className="mb-4 bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg flex items-center gap-2 animate-in fade-in slide-in-from-top-2">
-                <CheckCircle size={18} />
-                {successMsg}
-            </div>
-          )}
-
           {activeTab === 'profile' && renderProfile()}
           {activeTab === 'organization' && renderOrganization()}
           {activeTab === 'team' && renderTeam()}

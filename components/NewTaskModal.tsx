@@ -1,7 +1,9 @@
+
 import React, { useState, useEffect } from 'react';
 import { X, Save, Loader2, Calendar, Clock, Flag, Briefcase, User } from 'lucide-react';
 import { Client, Project, TaskCategory, Task } from '../types';
 import { taskService } from '../services/taskService';
+import { toast } from 'sonner';
 
 interface NewTaskModalProps {
   isOpen: boolean;
@@ -81,15 +83,17 @@ export const NewTaskModal: React.FC<NewTaskModalProps> = ({ isOpen, onClose, onS
 
       if (taskToEdit) {
         await taskService.updateTask(taskToEdit.id, payload);
+        toast.success("Tarefa atualizada.");
       } else {
         await taskService.createTask(payload);
+        toast.success("Tarefa criada.");
       }
 
       onSuccess();
       onClose();
     } catch (error) {
       console.error('Erro ao salvar tarefa:', error);
-      alert('Erro ao salvar tarefa. Verifique o console.');
+      toast.error('Erro ao salvar tarefa. Verifique o console.');
     } finally {
       setLoading(false);
     }

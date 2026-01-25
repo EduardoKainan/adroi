@@ -6,6 +6,7 @@ import { Client, Contract } from '../types';
 import { Search, Plus, MoreVertical, TrendingUp, AlertTriangle, Loader2, RefreshCw, Copy, Check, Calendar, ChevronRight, Trash2, PauseCircle, PlayCircle, PenLine, ChevronDown, DollarSign, Users, PieChart } from 'lucide-react';
 import { NewClientModal } from './NewClientModal';
 import { OnboardingGuide } from './OnboardingGuide';
+import { toast } from 'sonner';
 
 interface DashboardProps {
   onSelectClient: (client: Client) => void;
@@ -93,6 +94,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectClient }) => {
 
     } catch (error) {
       console.error("Failed to load dashboard data");
+      toast.error("Falha ao carregar dados do painel.");
     } finally {
       setLoading(false);
     }
@@ -182,8 +184,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectClient }) => {
       await navigator.clipboard.writeText(text);
       setCopiedId(client.id);
       setTimeout(() => setCopiedId(null), 2000);
+      toast.success('Relatório copiado para a área de transferência!');
     } catch (err) {
       console.error("Erro ao gerar relatório", err);
+      toast.error('Erro ao gerar relatório.');
     } finally {
       setCopyingId(null);
     }
@@ -206,9 +210,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectClient }) => {
 
         try {
           await clientService.updateClientStatus(client.id, newStatus);
+          toast.success(`Cliente ${newStatus === 'active' ? 'ativado' : 'pausado'} com sucesso.`);
           fetchData(); 
         } catch (error) {
-          alert(`Erro ao atualizar status: ${error}`);
+          toast.error(`Erro ao atualizar status: ${error}`);
         }
     }, 100);
   };
@@ -222,10 +227,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectClient }) => {
 
         try {
           await clientService.deleteClient(client.id);
+          toast.success('Cliente excluído com sucesso.');
           fetchData(); 
         } catch (error: any) {
           console.error(error);
-          alert(`Erro ao excluir cliente: ${error.message || error}`);
+          toast.error(`Erro ao excluir cliente: ${error.message || error}`);
         }
     }, 100);
   };

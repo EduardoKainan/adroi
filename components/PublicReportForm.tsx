@@ -1,8 +1,10 @@
+
 import React, { useState, useEffect } from 'react';
 import { clientService } from '../services/clientService';
 import { dealService } from '../services/dealService';
 import { commercialService } from '../services/commercialService';
 import { Loader2, CheckCircle2, Calendar, ListChecks, Star, Send, DollarSign } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface PublicReportFormProps {
   clientId: string;
@@ -116,6 +118,7 @@ export const PublicReportForm: React.FC<PublicReportFormProps> = ({ clientId }) 
          await Promise.all(promises);
 
          setSuccess(true);
+         toast.success("Resumo enviado com sucesso!");
          
          // Reset form
          setFormData({ 
@@ -137,7 +140,7 @@ export const PublicReportForm: React.FC<PublicReportFormProps> = ({ clientId }) 
       console.error("Erro no formulário público:", err);
       let msg = 'Erro ao salvar.';
       if (err?.message) msg = err.message;
-      alert(`${msg}\n\nVerifique sua conexão ou contate o suporte.`);
+      toast.error(`${msg}. Verifique sua conexão ou contate o suporte.`);
     } finally {
       setSubmitting(false);
     }

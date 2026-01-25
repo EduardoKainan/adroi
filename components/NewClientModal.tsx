@@ -1,7 +1,9 @@
+
 import React, { useState, useEffect } from 'react';
 import { X, Save, Loader2, Target, DollarSign, Wallet, Briefcase } from 'lucide-react';
 import { clientService } from '../services/clientService';
 import { Client } from '../types';
+import { toast } from 'sonner';
 
 interface NewClientModalProps {
   isOpen: boolean;
@@ -71,6 +73,7 @@ export const NewClientModal: React.FC<NewClientModalProps> = ({ isOpen, onClose,
         name: '', company: '', email: '', ad_account_id: '', 
         target_roas: '', target_cpa: '', budget_limit: '', crm_enabled: false
       });
+      toast.success(`Cliente ${clientToEdit ? 'atualizado' : 'criado'} com sucesso!`);
       
     } catch (error: any) {
       console.error('Error saving client:', error);
@@ -87,7 +90,7 @@ export const NewClientModal: React.FC<NewClientModalProps> = ({ isOpen, onClose,
         message = `Erro de Banco de Dados: Colunas novas ausentes (target_roas ou crm_enabled).`;
       }
 
-      alert(`Erro ao ${clientToEdit ? 'atualizar' : 'criar'} cliente: ${message}`);
+      toast.error(`Erro ao ${clientToEdit ? 'atualizar' : 'criar'} cliente: ${message}`);
     } finally {
       setLoading(false);
     }
