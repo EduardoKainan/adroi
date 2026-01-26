@@ -1,12 +1,12 @@
 
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { Client, Contract, Campaign, DailyMetric, Deal, Insight, CommercialActivity } from '../types';
-import { clientService, getLocalDateString } from '../services/clientService';
+import { clientService, getLocalDateString, PlatformMetric } from '../services/clientService';
 import { contractService } from '../services/contractService';
 import { dealService } from '../services/dealService';
 import { commercialService } from '../services/commercialService';
 import { aiAnalysisService } from '../services/aiAnalysisService';
-import { DollarSign, Target, TrendingUp, Calendar, Download, Loader2, Users, ShoppingBag, Plus, Copy, Check, BarChart, ChevronLeft, ChevronDown, Sparkles, PieChart, Link, ExternalLink, FileText, Briefcase, Search, Activity, Trash2, PenLine, Globe } from 'lucide-react';
+import { DollarSign, Target, TrendingUp, Calendar, Download, Loader2, Users, ShoppingBag, Plus, Copy, Check, BarChart, ChevronLeft, ChevronDown, Sparkles, PieChart, Link, ExternalLink, FileText, Briefcase, Search, Activity, Trash2, PenLine, Globe, Layers } from 'lucide-react';
 import { NewSaleModal } from './NewSaleModal';
 import { NewManualMetricModal } from './NewManualMetricModal';
 import { InsightsFeed } from './InsightsFeed';
@@ -116,7 +116,11 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
   const [loading, setLoading] = useState(true);
   const [chartsReady, setChartsReady] = useState(false);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
-  const [chartData, setChartData] = useState<DailyMetric[]>([]);
+  
+  // Agora usamos PlatformMetric para gráficos e agregamos localmente para DailyMetric
+  const [platformMetrics, setPlatformMetrics] = useState<PlatformMetric[]>([]);
+  const [aggregatedChartData, setAggregatedChartData] = useState<DailyMetric[]>([]);
+  
   const [contract, setContract] = useState<Contract | null>(null);
   
   // Dados de CRM
@@ -130,6 +134,7 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
   const [copied, setCopied] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
   const [crmListTab, setCrmListTab] = useState<'deals' | 'activities'>('deals');
+  const [activePlatformTab, setActivePlatformTab] = useState<string>('ALL'); // Estado para abas de gráficos
   
   // Header Dropdown State
   const [isClientDropdownOpen, setIsClientDropdownOpen] = useState(false);
@@ -147,6 +152,43 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
   const [dateOption, setDateOption] = useState<DateRangeOption>('30D');
   const [dateRange, setDateRange] = useState({ start: '', end: '' });
   const [showDatePicker, setShowDatePicker] = useState(false);
+
+  // Cores consistentes por plataforma
+  const platformColors: Record<string, string> = {
+      'Meta Ads': '#1877F2',
+      'Facebook Ads': '#1877F2',
+      'Instagram Ads': '#E1306C',
+      'Google Ads': '#DB4437',
+      'TikTok Ads': '#000000',
+      'LinkedIn Ads': '#0077B5',
+      'Pinterest Ads': '#BD081C',
+      'YouTube Ads': '#FF0000',
+      'Offline/CRM': '#10b981',
+      'Outros': '#64748b'
+  };
+
+  const getPlatformColor = (platform: string) => {
+      if (platformColors[platform]) return platformColors[platform];
+      // Fallback para cores conhecidas parciais
+      if (platform.includes('Meta') || platform.includes('Facebook')) return platformColors['Meta Ads'];
+      if (platform.includes('Google')) return platformColors['Google Ads'];
+      if (platform.includes('TikTok')) return platformColors['TikTok Ads'];
+      return platformColors['Outros'];
+  };
+
+  // Helper para identificar plataforma do nome da campanha
+  const getPlatformFromCampaignName = (name: string): string => {
+      const lower = name.toLowerCase();
+      if (lower.includes('google')) return 'Google Ads';
+      if (lower.includes('tiktok')) return 'TikTok Ads';
+      if (lower.includes('linkedin')) return 'LinkedIn Ads';
+      if (lower.includes('[manual]')) {
+          // Tenta extrair do manual
+          const match = name.match(/\[Manual\]\s?(.*)/i);
+          if (match && match[1]) return match[1].trim();
+      }
+      return 'Meta Ads'; // Default fallback
+  };
 
   // Sincroniza o currentClient quando a prop muda (ex: troca pelo pai)
   useEffect(() => {
@@ -231,18 +273,36 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
 
       const promises: Promise<any>[] = [
         clientService.getCampaigns(currentClient.id, startDateStr, endDateStr),
-        clientService.getClientMetrics(currentClient.id, startDateStr, endDateStr),
+        // Agora buscamos métricas detalhadas por plataforma
+        clientService.getClientPlatformMetrics(currentClient.id, startDateStr, endDateStr),
         contractService.getClientContract(currentClient.id),
-        dealService.getDeals(currentClient.id), // Retorna todos, filtramos localmente para a lista lateral
+        dealService.getDeals(currentClient.id), 
         aiAnalysisService.getSavedInsights(currentClient.id),
-        // Adicionamos sempre o fetch de activities, independente do flag, para garantir que se houver dados, mostre.
         commercialService.getActivities(currentClient.id)
       ];
 
       const results = await Promise.all(promises);
       
       setCampaigns(results[0]);
-      setChartData(results[1]);
+      
+      // Processar métricas detalhadas
+      const pMetrics = results[1] as PlatformMetric[];
+      setPlatformMetrics(pMetrics);
+
+      // Agregar para KPIs e IA (simulando o antigo getClientMetrics)
+      const aggData: Record<string, DailyMetric> = {};
+      pMetrics.forEach(m => {
+          if (!aggData[m.date]) aggData[m.date] = { date: m.date, spend: 0, revenue: 0, leads: 0, roas: 0 };
+          aggData[m.date].spend += m.spend;
+          aggData[m.date].revenue += m.revenue;
+          aggData[m.date].leads += m.leads;
+      });
+      const aggArray = Object.values(aggData).map(d => ({
+          ...d,
+          roas: d.spend > 0 ? d.revenue / d.spend : 0
+      }));
+      setAggregatedChartData(aggArray);
+
       setContract(results[2]);
       setDeals(results[3]);
       setInsights(results[4]);
@@ -308,7 +368,7 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
      };
 
      try {
-       const generatedInsights = await aiAnalysisService.generateInsights(clientWithCurrentStats, campaigns, chartData);
+       const generatedInsights = await aiAnalysisService.generateInsights(clientWithCurrentStats, campaigns, aggregatedChartData);
        
        if (generatedInsights.length > 0 && !generatedInsights[0].title.includes("Indisponível")) {
            await aiAnalysisService.saveInsights(currentClient.id, generatedInsights);
@@ -405,127 +465,170 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
     { label: 'ROI Real', value: `${((filteredStats.roi || 0) * 100).toFixed(1)}%`, sub: 'Final', trend: 'up', icon: BarChart, color: 'text-emerald-500' },
   ];
 
+  // --- DERIVED DATA PARA ABAS ---
+  // Extrair lista de plataformas únicas dos dados
+  const availablePlatforms = useMemo(() => {
+      const platforms = new Set<string>();
+      platformMetrics.forEach(m => platforms.add(m.platform));
+      return ['ALL', ...Array.from(platforms)];
+  }, [platformMetrics]);
+
+  // Filtrar métricas com base na aba ativa
+  const filteredMetricsForCharts = useMemo(() => {
+      if (activePlatformTab === 'ALL') return platformMetrics;
+      return platformMetrics.filter(m => m.platform === activePlatformTab);
+  }, [activePlatformTab, platformMetrics]);
+
+  // Filtrar campanhas com base na aba ativa (para o Funil)
+  const filteredCampaignsForCharts = useMemo(() => {
+      if (activePlatformTab === 'ALL') return campaigns;
+      return campaigns.filter(c => getPlatformFromCampaignName(c.name) === activePlatformTab);
+  }, [activePlatformTab, campaigns]);
+
+
   // --- ECHARTS CONFIGURATIONS ---
 
-  // 1. Finance Chart
+  // 1. Finance Chart (Updated for Platforms & Tabs)
   const getFinanceOption = useMemo(() => {
     if (!dateRange.start || !dateRange.end) return {};
 
-    // 1. Gerar array de datas completo para o eixo X
+    // 1. Gerar eixo X
     const allDates: string[] = [];
-    let curr = new Date(dateRange.start + 'T12:00:00'); // evita timezone shift
+    let curr = new Date(dateRange.start + 'T12:00:00');
     const end = new Date(dateRange.end + 'T12:00:00');
     
     while (curr <= end) {
-        // Garantir formato YYYY-MM-DD localmente
         const year = curr.getFullYear();
         const month = String(curr.getMonth() + 1).padStart(2, '0');
         const day = String(curr.getDate()).padStart(2, '0');
         allDates.push(`${year}-${month}-${day}`);
         curr.setDate(curr.getDate() + 1);
     }
+    const datesLabels = allDates.map(d => `${d.split('-')[2]}/${d.split('-')[1]}`);
 
-    // 2. Mapear dados existentes (Ads) por data
-    const adDataMap: Record<string, DailyMetric> = {};
-    chartData.forEach(d => { adDataMap[d.date] = d; });
+    const series: any[] = [];
+    const legends: string[] = [];
 
-    // 3. Mapear dados manuais (Vendas) por data
-    const manualRevenueMap: Record<string, number> = {};
-    deals.filter(d => d.date >= dateRange.start && d.date <= dateRange.end).forEach(d => {
-        if (!manualRevenueMap[d.date]) manualRevenueMap[d.date] = 0;
-        manualRevenueMap[d.date] += Number(d.total_value);
-    });
+    if (activePlatformTab === 'ALL') {
+        // --- MODO GERAL: Barras Empilhadas por Plataforma + Total Revenue ---
+        const platforms = Array.from(new Set(platformMetrics.map(p => p.platform)));
+        
+        // > INVESTIMENTO (Barras Empilhadas)
+        platforms.forEach(platform => {
+            const data = allDates.map(date => {
+                const entry = platformMetrics.find(m => m.date === date && m.platform === platform);
+                return entry ? entry.spend : 0;
+            });
+            
+            if (data.reduce((a, b) => a + b, 0) > 0) {
+                series.push({
+                    name: `Invest. ${platform}`,
+                    type: 'bar',
+                    stack: 'spend',
+                    itemStyle: { color: getPlatformColor(platform) },
+                    data: data,
+                    tooltip: { valueFormatter: (value: number) => `R$ ${value.toLocaleString()}` }
+                });
+                legends.push(`Invest. ${platform}`);
+            }
+        });
 
-    // 4. Construir vetores alinhados
-    const datesLabels = allDates.map(d => `${d.split('-')[2]}/${d.split('-')[1]}`); // DD/MM
-    const spendData = allDates.map(d => adDataMap[d]?.spend || 0);
-    const adRevenueData = allDates.map(d => adDataMap[d]?.revenue || 0);
-    const manualRevenueData = allDates.map(d => manualRevenueMap[d] || 0);
-    
-    const totalRevenueData = allDates.map((d, i) => adRevenueData[i] + manualRevenueData[i]);
+        // > RECEITA TOTAL (Ads + CRM)
+        const totalRevenueData = allDates.map(date => {
+            const adsRev = platformMetrics
+                .filter(m => m.date === date)
+                .reduce((acc, m) => acc + m.revenue, 0);
+            const crmRev = deals
+                .filter(d => d.date === date)
+                .reduce((acc, d) => acc + Number(d.total_value), 0);
+            return adsRev + crmRev;
+        });
+
+        series.push({
+            name: 'Receita Total',
+            type: 'line',
+            smooth: true,
+            lineStyle: { width: 3, color: '#10b981' },
+            areaStyle: { opacity: 0.1, color: '#10b981' },
+            data: totalRevenueData,
+            yAxisIndex: 0,
+            z: 10
+        });
+        legends.push('Receita Total');
+
+    } else {
+        // --- MODO PLATAFORMA: Investimento vs Receita da Plataforma ---
+        const spendData = allDates.map(date => {
+            const entry = filteredMetricsForCharts.find(m => m.date === date);
+            return entry ? entry.spend : 0;
+        });
+
+        const revenueData = allDates.map(date => {
+            const entry = filteredMetricsForCharts.find(m => m.date === date);
+            return entry ? entry.revenue : 0;
+        });
+
+        series.push({
+            name: 'Investimento',
+            type: 'bar',
+            itemStyle: { color: getPlatformColor(activePlatformTab) },
+            data: spendData
+        });
+        legends.push('Investimento');
+
+        series.push({
+            name: 'Receita (Ads)',
+            type: 'line',
+            smooth: true,
+            lineStyle: { width: 3, color: '#10b981' },
+            data: revenueData
+        });
+        legends.push('Receita (Ads)');
+    }
 
     return {
       toolbox: { feature: { saveAsImage: { show: true, title: 'Salvar' } }, right: '2%' },
       tooltip: {
         trigger: 'axis',
-        axisPointer: { type: 'cross' },
-        formatter: (params: any) => {
-          let res = `<div class="font-bold mb-1 border-b border-slate-100 pb-1 text-slate-700">Dia ${params[0].axisValue}</div>`;
-          params.forEach((param: any) => {
-            const val = param.value !== undefined ? param.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'R$ 0,00';
-            
-            // Cor bolinha
-            const color = typeof param.color === 'string' ? param.color : (param.color?.colorStops?.[0]?.color || param.color); 
-
-            res += `<div class="flex items-center gap-2 text-xs py-0.5">
-               <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${color}"></span>
-               <span class="text-slate-500">${param.seriesName}:</span> <span class="font-bold text-slate-700">${val}</span>
-            </div>`;
-          });
-          return res;
-        }
+        axisPointer: { type: 'cross' }
       },
       legend: { 
-          data: ['Receita Total', 'Investimento', 'Receita Ads', 'Receita Manual'], 
+          data: legends, 
           bottom: 0,
-          itemGap: 20
+          itemGap: 10,
+          textStyle: { fontSize: 10 }
       },
-      grid: { left: '2%', right: '4%', bottom: '15%', top: '10%', containLabel: true },
+      grid: { left: '2%', right: '4%', bottom: '20%', top: '10%', containLabel: true },
       xAxis: [{ 
           type: 'category', 
-          boundaryGap: false, 
+          boundaryGap: true, 
           data: datesLabels, 
           axisLine: { show: false }, 
           axisTick: { show: false } 
       }],
       yAxis: [{ type: 'value', splitLine: { lineStyle: { type: 'dashed' } } }],
-      series: [
-        {
-          name: 'Receita Total',
-          type: 'line',
-          smooth: true,
-          lineStyle: { width: 3, color: '#10b981' }, // Emerald
-          areaStyle: { opacity: 0.1, color: '#10b981' },
-          data: totalRevenueData,
-          z: 1 // Fundo
-        },
-        {
-          name: 'Investimento',
-          type: 'line',
-          smooth: true,
-          lineStyle: { width: 3, color: '#3b82f6' }, // Blue
-          areaStyle: { opacity: 0.1, color: '#3b82f6' },
-          data: spendData,
-          z: 2
-        },
-        {
-            name: 'Receita Ads',
-            type: 'line',
-            smooth: true,
-            lineStyle: { width: 2, color: '#94a3b8', type: 'dashed' }, // Slate
-            data: adRevenueData,
-            z: 3
-        },
-        {
-            name: 'Receita Manual',
-            type: 'line',
-            smooth: true,
-            symbol: 'circle',
-            symbolSize: 6,
-            lineStyle: { width: 2, color: '#8b5cf6', type: 'solid' }, // Violet Solid (mais visível)
-            itemStyle: { color: '#8b5cf6' },
-            data: manualRevenueData,
-            z: 4 // Topo absoluto para garantir visibilidade
-        }
-      ]
+      series: series
     };
-  }, [chartData, deals, dateRange]);
+  }, [platformMetrics, filteredMetricsForCharts, activePlatformTab, deals, dateRange]);
 
-  // 2. Acquisition Chart
+  // 2. Acquisition Chart (Respects Filter)
   const getAcquisitionOption = useMemo(() => {
-    const dates = chartData.map(d => d.date.split('-')[2]);
-    const leads = chartData.map(d => d.leads);
-    const cpl = chartData.map(d => d.leads > 0 ? d.spend / d.leads : 0);
+    // Agrupa dados filtrados por data
+    const groupedData: Record<string, { leads: number, spend: number }> = {};
+    
+    filteredMetricsForCharts.forEach(m => {
+        if (!groupedData[m.date]) groupedData[m.date] = { leads: 0, spend: 0 };
+        groupedData[m.date].leads += m.leads;
+        groupedData[m.date].spend += m.spend;
+    });
+
+    // Ordena chaves
+    const sortedDates = Object.keys(groupedData).sort();
+    const datesLabels = sortedDates.map(d => `${d.split('-')[2]}/${d.split('-')[1]}`);
+    
+    const leads = sortedDates.map(d => groupedData[d].leads);
+    const cpl = sortedDates.map(d => groupedData[d].leads > 0 ? groupedData[d].spend / groupedData[d].leads : 0);
+    
     const barGradient = new echarts.graphic.LinearGradient(0, 0, 1, 0, [{ offset: 0, color: '#d97706' }, { offset: 1, color: '#b45309' }]);
 
     return {
@@ -533,7 +636,7 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
       tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
       legend: { data: ['Leads', 'CPL'], bottom: 0 },
       grid: { left: '2%', right: '4%', bottom: '12%', top: '15%', containLabel: true },
-      xAxis: [{ type: 'category', data: dates, axisLine: { show: false }, axisTick: { show: false } }],
+      xAxis: [{ type: 'category', data: datesLabels, axisLine: { show: false }, axisTick: { show: false } }],
       yAxis: [
         { type: 'value', name: 'Leads', position: 'left', axisLine: { show: false }, axisTick: { show: false } },
         { type: 'value', name: 'CPL (R$)', position: 'right', axisLine: { show: false }, axisTick: { show: false } }
@@ -543,14 +646,15 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
         { name: 'CPL', type: 'line', yAxisIndex: 1, smooth: true, itemStyle: { color: '#ef4444' }, lineStyle: { width: 3 }, data: cpl }
       ]
     };
-  }, [chartData]);
+  }, [filteredMetricsForCharts]);
 
-  // 3. Marketing Funnel (Ads Logic Only)
+  // 3. Marketing Funnel (Respects Filter)
   const getMarketingFunnelOption = useMemo(() => {
-    const impressions = campaigns.reduce((acc, c) => acc + (c.impressions || 0), 0);
-    const clicks = campaigns.reduce((acc, c) => acc + (c.clicks || 0), 0);
-    const leads = campaigns.reduce((acc, c) => acc + (c.leads || 0), 0);
-    const adSales = campaigns.reduce((acc, c) => acc + (c.purchases || 0), 0);
+    // Usa campanhas filtradas
+    const impressions = filteredCampaignsForCharts.reduce((acc, c) => acc + (c.impressions || 0), 0);
+    const clicks = filteredCampaignsForCharts.reduce((acc, c) => acc + (c.clicks || 0), 0);
+    const leads = filteredCampaignsForCharts.reduce((acc, c) => acc + (c.leads || 0), 0);
+    const adSales = filteredCampaignsForCharts.reduce((acc, c) => acc + (c.purchases || 0), 0);
 
     const create3DGradient = (colorStart: string, colorMid: string, colorEnd: string) => {
         return new echarts.graphic.LinearGradient(0, 0, 1, 0, [
@@ -575,7 +679,7 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
     ];
 
     return {
-      title: { text: 'Funil de Marketing (Ads)', left: 'center', textStyle: { fontSize: 14, color: '#64748b' }, top: 5 },
+      title: { text: `Funil ${activePlatformTab === 'ALL' ? 'Geral' : activePlatformTab}`, left: 'center', textStyle: { fontSize: 14, color: '#64748b' }, top: 5 },
       toolbox: { feature: { saveAsImage: { show: true, title: 'Salvar' } }, right: '2%' },
       tooltip: {
         trigger: 'item',
@@ -589,17 +693,15 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
           data: data.map((d, i) => ({ value: d.value || 1, name: d.name, realValue: d.realValue, itemStyle: { color: colors[i] } }))
       }]
     };
-  }, [campaigns]);
+  }, [filteredCampaignsForCharts, activePlatformTab]);
 
-  // 4. Commercial Funnel (CRM Logic Only)
+  // 4. Commercial Funnel (CRM - Only shows on ALL)
   const getCommercialFunnelOption = useMemo(() => {
-    // Métricas de CRM (Filtradas pelo período)
     const filteredActivities = activities.filter(a => a.date >= dateRange.start && a.date <= dateRange.end);
     
-    // --- ATUALIZAÇÃO: Cálculo usando 'quantity' ---
     const meetings = filteredActivities.filter(a => a.type === 'meeting').reduce((acc, a) => acc + (a.quantity !== undefined ? a.quantity : 1), 0);
     const proposals = filteredActivities.filter(a => a.type === 'proposal').reduce((acc, a) => acc + (a.quantity !== undefined ? a.quantity : 1), 0);
-    const leads = filteredStats.totalLeads; // Leads totais vindos do Marketing
+    const leads = filteredStats.totalLeads;
     const dealsClosed = deals.filter(d => d.date >= dateRange.start && d.date <= dateRange.end).length;
 
     const create3DGradient = (colorStart: string, colorMid: string, colorEnd: string) => {
@@ -642,11 +744,10 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
   }, [filteredStats.totalLeads, activities, deals, dateRange]);
 
 
-  // 5. Evolution Chart (Sales vs Quality) - FIXED LOGIC
+  // 5. Evolution Chart
   const getQualityEvolutionOption = useMemo(() => {
     if (!dateRange.start || !dateRange.end) return {};
 
-    // 1. Gerar array de datas completo
     const allDates: string[] = [];
     let curr = new Date(dateRange.start + 'T12:00:00');
     const end = new Date(dateRange.end + 'T12:00:00');
@@ -659,26 +760,21 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
         curr.setDate(curr.getDate() + 1);
     }
 
-    const datesLabels = allDates.map(d => `${d.split('-')[2]}/${d.split('-')[1]}`); // DD/MM
+    const datesLabels = allDates.map(d => `${d.split('-')[2]}/${d.split('-')[1]}`);
 
-    // 2. Mapear Dados
     const proposalData: number[] = [];
     const salesData: number[] = [];
     const qualityData: (number | null)[] = [];
 
     allDates.forEach(date => {
-        // Propostas
         const dayProposals = activities
             .filter(a => a.date === date && a.type === 'proposal')
             .reduce((acc, a) => acc + (a.quantity !== undefined ? a.quantity : 1), 0);
         
-        // Vendas
         const daySales = deals
             .filter(d => d.date === date)
             .reduce((acc, d) => acc + (d.quantity !== undefined ? d.quantity : 1), 0);
 
-        // Qualidade Média
-        // Correção: Garantir que lead_quality_score seja tratado como número e maior que 0
         const dayQualityActs = activities.filter(a => a.date === date && a.lead_quality_score && a.lead_quality_score > 0);
         let avgQuality = null;
         if (dayQualityActs.length > 0) {
@@ -701,51 +797,54 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
       grid: { left: '2%', right: '4%', bottom: '15%', top: '15%', containLabel: true },
       xAxis: [{ type: 'category', data: datesLabels, axisLine: { show: false }, axisTick: { show: false } }],
       yAxis: [
-        { 
-            type: 'value', 
-            name: 'Volume', 
-            position: 'left',
-            splitLine: { show: true, lineStyle: { type: 'dashed' } }
-        },
-        { 
-            type: 'value', 
-            name: 'Score (1-5)', 
-            min: 0, 
-            max: 5, 
-            position: 'right',
-            splitLine: { show: false }
-        }
+        { type: 'value', name: 'Volume', position: 'left', splitLine: { show: true, lineStyle: { type: 'dashed' } } },
+        { type: 'value', name: 'Score (1-5)', min: 0, max: 5, position: 'right', splitLine: { show: false } }
       ],
       series: [
-        {
-            name: 'Propostas Enviadas',
-            type: 'bar',
-            barGap: '10%',
-            itemStyle: { color: '#8b5cf6', borderRadius: [4, 4, 0, 0] }, // Violet
-            data: proposalData
-        },
-        {
-            name: 'Vendas Realizadas',
-            type: 'bar',
-            itemStyle: { color: '#10b981', borderRadius: [4, 4, 0, 0] }, // Emerald
-            data: salesData
-        },
-        {
-            name: 'Qualidade Média Lead (1-5)',
-            type: 'line',
-            yAxisIndex: 1,
-            smooth: true,
-            symbol: 'circle',
-            symbolSize: 8,
-            lineStyle: { width: 3, color: '#f59e0b' }, // Amber
-            itemStyle: { color: '#f59e0b', borderWidth: 2, borderColor: '#fff' },
-            connectNulls: true, // Conecta pontos se houver dias sem dados no meio
-            data: qualityData
-        }
+        { name: 'Propostas Enviadas', type: 'bar', barGap: '10%', itemStyle: { color: '#8b5cf6', borderRadius: [4, 4, 0, 0] }, data: proposalData },
+        { name: 'Vendas Realizadas', type: 'bar', itemStyle: { color: '#10b981', borderRadius: [4, 4, 0, 0] }, data: salesData },
+        { name: 'Qualidade Média Lead (1-5)', type: 'line', yAxisIndex: 1, smooth: true, symbol: 'circle', symbolSize: 8, lineStyle: { width: 3, color: '#f59e0b' }, itemStyle: { color: '#f59e0b', borderWidth: 2, borderColor: '#fff' }, connectNulls: true, data: qualityData }
       ]
     };
 
   }, [activities, deals, dateRange]);
+
+  // 6. Distribution Charts (Pie) - Share of Spend & Revenue by Platform
+  const getDistributionOption = (type: 'spend' | 'revenue') => {
+      const platforms = Array.from(new Set(platformMetrics.map(p => p.platform)));
+      let data = platforms.map(p => ({
+          name: p,
+          value: platformMetrics.filter(m => m.platform === p).reduce((acc, m) => acc + (type === 'spend' ? m.spend : m.revenue), 0)
+      })).filter(d => d.value > 0);
+
+      // Add CRM Revenue if type is revenue
+      if (type === 'revenue') {
+          const crmValue = deals
+            .filter(d => d.date >= dateRange.start && d.date <= dateRange.end)
+            .reduce((acc, d) => acc + Number(d.total_value), 0);
+          if (crmValue > 0) {
+              data.push({ name: 'Offline/CRM', value: crmValue });
+          }
+      }
+
+      return {
+          title: { text: type === 'spend' ? 'Distribuição Investimento' : 'Distribuição Receita', left: 'center', top: '5%', textStyle: { fontSize: 14, color: '#64748b' } },
+          tooltip: { trigger: 'item', formatter: '{b}: R$ {c} ({d}%)' },
+          legend: { bottom: '5%', left: 'center' },
+          series: [
+              {
+                  type: 'pie',
+                  radius: ['40%', '70%'],
+                  avoidLabelOverlap: false,
+                  itemStyle: { borderRadius: 10, borderColor: '#fff', borderWidth: 2 },
+                  label: { show: false, position: 'center' },
+                  emphasis: { label: { show: true, fontSize: '14', fontWeight: 'bold' } },
+                  labelLine: { show: false },
+                  data: data.map(d => ({ value: d.value, name: d.name, itemStyle: { color: getPlatformColor(d.name) } }))
+              }
+          ]
+      };
+  };
 
 
   const dateOptionLabels: Record<string, string> = {
@@ -893,7 +992,7 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
         onClose={() => setIsSaleModalOpen(false)} 
         onSuccess={handleSaleAdded} 
         clientId={currentClient.id} 
-        dealToEdit={dealToEdit} // Passar a prop de edição
+        dealToEdit={dealToEdit} 
       />
 
       <NewManualMetricModal
@@ -1049,7 +1148,7 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
                   {copied ? <Check size={14} /> : <Copy size={14} />} {copied ? 'Copiado' : 'Relatório'}
                 </button>
                 
-                {/* Botão de Métricas Externas (Novo) */}
+                {/* Botão de Métricas Externas */}
                 <button 
                   onClick={() => setIsMetricModalOpen(true)}
                   className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-blue-50 text-blue-700 border border-blue-200 px-4 py-2 rounded-lg text-xs font-bold hover:bg-blue-100 transition-colors shadow-sm"
@@ -1086,21 +1185,40 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
         </div>
       )}
 
-      {/* AI Insights Feed - Agora com onDismiss */}
+      {/* AI Insights Feed */}
       {showInsights && <InsightsFeed insights={insights} loading={loadingInsights} onDismiss={handleDismissInsight} />}
 
-      {/* Main Chart Area (Agora em Grid 2 Colunas) */}
+      {/* --- PLATFORM TABS --- */}
+      {!loading && availablePlatforms.length > 1 && (
+          <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+              {availablePlatforms.map(platform => (
+                  <button
+                      key={platform}
+                      onClick={() => setActivePlatformTab(platform)}
+                      className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-all border ${
+                          activePlatformTab === platform
+                              ? 'bg-indigo-600 text-white border-indigo-600 shadow-md'
+                              : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                      }`}
+                  >
+                      {platform === 'ALL' ? 'Visão Geral' : platform}
+                  </button>
+              ))}
+          </div>
+      )}
+
+      {/* Main Chart Area */}
       {loading || !chartsReady ? (
         <ChartSkeleton />
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-6 animate-fade-in">
             
             {/* Linha 1: Financeiro e Aquisição */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="bg-white p-4 md:p-6 rounded-xl border border-slate-200 shadow-sm h-full">
                     <h3 className="text-base md:text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
                         <DollarSign size={18} className="text-emerald-500" />
-                        Financeiro
+                        Financeiro {activePlatformTab !== 'ALL' && `(${activePlatformTab})`}
                     </h3>
                     <ReactECharts 
                         option={getFinanceOption} 
@@ -1124,12 +1242,34 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
                 </div>
             </div>
 
-            {/* Linha 2: Funis */}
+            {/* Linha 2: Distribuição por Plataforma (NOVO) - Só mostra no modo Geral */}
+            {activePlatformTab === 'ALL' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="bg-white p-4 md:p-6 rounded-xl border border-slate-200 shadow-sm">
+                        <ReactECharts 
+                            option={getDistributionOption('spend')} 
+                            style={{ height: '300px', width: '100%' }} 
+                            opts={{ renderer: 'svg' }}
+                            notMerge={true}
+                        />
+                    </div>
+                    <div className="bg-white p-4 md:p-6 rounded-xl border border-slate-200 shadow-sm">
+                        <ReactECharts 
+                            option={getDistributionOption('revenue')} 
+                            style={{ height: '300px', width: '100%' }} 
+                            opts={{ renderer: 'svg' }}
+                            notMerge={true}
+                        />
+                    </div>
+                </div>
+            )}
+
+            {/* Linha 3: Funis */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="bg-white p-4 md:p-6 rounded-xl border border-slate-200 shadow-sm h-full">
                     <h3 className="text-base md:text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
                         <Target size={18} className="text-blue-500" />
-                        Funil de Marketing
+                        Funil de Marketing {activePlatformTab !== 'ALL' && `(${activePlatformTab})`}
                     </h3>
                     <ReactECharts 
                         option={getMarketingFunnelOption} 
@@ -1139,7 +1279,8 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
                     />
                 </div>
 
-                {currentClient.crm_enabled && (
+                {/* CRM Funnel só aparece se estiver na aba GERAL, pois é agnóstico de plataforma de anúncio na maioria das vezes */}
+                {currentClient.crm_enabled && activePlatformTab === 'ALL' && (
                     <div className="bg-white p-4 md:p-6 rounded-xl border border-slate-200 shadow-sm h-full">
                         <h3 className="text-base md:text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
                             <Briefcase size={18} className="text-purple-500" />
@@ -1155,30 +1296,32 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
                 )}
             </div>
 
-            {/* Linha 3: Evolução Comercial & Qualidade (Novo) */}
-            <div className="bg-white p-4 md:p-6 rounded-xl border border-slate-200 shadow-sm">
-                <h3 className="text-base md:text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-                    <Activity size={18} className="text-amber-500" />
-                    Evolução Comercial & Qualidade
-                </h3>
-                <ReactECharts 
-                    option={getQualityEvolutionOption} 
-                    style={{ height: '350px', width: '100%' }} 
-                    opts={{ renderer: 'svg' }}
-                    notMerge={true}
-                />
-            </div>
+            {/* Linha 4: Evolução Comercial & Qualidade (Só no Geral) */}
+            {activePlatformTab === 'ALL' && (
+                <div className="bg-white p-4 md:p-6 rounded-xl border border-slate-200 shadow-sm">
+                    <h3 className="text-base md:text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                        <Activity size={18} className="text-amber-500" />
+                        Evolução Comercial & Qualidade
+                    </h3>
+                    <ReactECharts 
+                        option={getQualityEvolutionOption} 
+                        style={{ height: '350px', width: '100%' }} 
+                        opts={{ renderer: 'svg' }}
+                        notMerge={true}
+                    />
+                </div>
+            )}
 
         </div>
       )}
 
-      {/* CRM / Vendas Panel (Movido para baixo) */}
+      {/* CRM / Vendas Panel */}
       {loading ? (
         <SalesSkeleton />
       ) : (
         <div className="bg-white p-4 md:p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col w-full">
              
-             {/* Header com Abas (Se CRM Ativo) */}
+             {/* Header com Abas */}
              <div className="flex justify-between items-start mb-4">
                 <div className="flex gap-2">
                     {currentClient.crm_enabled ? (
@@ -1241,7 +1384,8 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
                     </tr>
                  </thead>
                  <tbody className="divide-y divide-slate-100">
-                    {campaigns.map((camp) => {
+                    {/* Filtra campanhas na tabela também, se não for ALL */}
+                    {filteredCampaignsForCharts.map((camp) => {
                        const cpl = camp.leads > 0 ? camp.spend / camp.leads : 0;
                        return (
                        <tr key={camp.id} className="transition-colors hover:bg-slate-50">
@@ -1263,7 +1407,7 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
 
            {/* Mobile/Tablet Campaign Cards */}
            <div className="lg:hidden divide-y divide-slate-100">
-              {campaigns.map((camp) => {
+              {filteredCampaignsForCharts.map((camp) => {
                 const cpl = camp.leads > 0 ? camp.spend / camp.leads : 0;
                 return (
                   <div key={camp.id} className="p-4 space-y-3">

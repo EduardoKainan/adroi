@@ -2,6 +2,16 @@
 import { supabase } from '../lib/supabase';
 import { Client, Campaign, DailyMetric } from '../types';
 
+export interface PlatformMetric {
+    platform: string;
+    date: string;
+    spend: number;
+    revenue: number;
+    leads: number;
+    impressions: number;
+    clicks: number;
+}
+
 // Helper para formatar data localmente (YYYY-MM-DD)
 export const getLocalDateString = (date: Date): string => {
   const year = date.getFullYear();
@@ -344,6 +354,68 @@ export const clientService = {
     }));
   },
 
+  // Get detailed metrics by platform
+  async getClientPlatformMetrics(clientId: string, startDateStr: string, endDateStr: string): Promise<PlatformMetric[]> {
+    const { data: campaigns } = await supabase
+      .from('campaigns')
+      .select('id, name')
+      .eq('client_id', clientId);
+    
+    if (!campaigns || campaigns.length === 0) return [];
+
+    const campaignIds = campaigns.map(c => c.id);
+
+    const { data: metrics, error } = await supabase
+      .from('campaign_metrics')
+      .select('*')
+      .in('campaign_id', campaignIds)
+      .gte('date', startDateStr)
+      .lte('date', endDateStr)
+      .order('date', { ascending: true });
+
+    if (error) throw error;
+
+    const getPlatform = (name: string): string => {
+        const lower = name.toLowerCase();
+        if (lower.includes('google')) return 'Google Ads';
+        if (lower.includes('tiktok')) return 'TikTok Ads';
+        if (lower.includes('linkedin')) return 'LinkedIn Ads';
+        if (lower.includes('pinterest')) return 'Pinterest Ads';
+        if (lower.includes('[manual]')) {
+             const match = name.match(/\[Manual\]\s?(.*)/i);
+             if (match && match[1]) return match[1].trim();
+        }
+        return 'Meta Ads';
+    };
+
+    const aggregated: Record<string, PlatformMetric> = {};
+
+    metrics?.forEach((m: any) => {
+        const campaign = campaigns.find(c => c.id === m.campaign_id);
+        const platform = campaign ? getPlatform(campaign.name) : 'Meta Ads';
+        const key = `${m.date}_${platform}`;
+
+        if (!aggregated[key]) {
+            aggregated[key] = {
+                date: m.date,
+                platform,
+                spend: 0,
+                revenue: 0,
+                leads: 0,
+                impressions: 0,
+                clicks: 0
+            };
+        }
+        aggregated[key].spend += Number(m.spend || 0);
+        aggregated[key].revenue += Number(m.revenue || 0);
+        aggregated[key].leads += Number(m.leads || 0);
+        aggregated[key].impressions += Number(m.impressions || 0);
+        aggregated[key].clicks += Number(m.clicks || 0);
+    });
+
+    return Object.values(aggregated).sort((a, b) => a.date.localeCompare(b.date));
+  },
+
   // --- NOVA FUNÇÃO: Adicionar Métrica Manual ---
   async addManualPlatformMetric(
     clientId: string, 
@@ -382,7 +454,7 @@ export const clientService = {
           revenue: 0,
           leads: 0,
           purchases: 0,
-          roas: 0,
+          // roas: 0, // REMOVIDO: Coluna pode ser gerada
           impressions: 0,
           clicks: 0
         }])
@@ -411,12 +483,14 @@ export const clientService = {
           clicks: data.clicks,
           leads: data.leads,
           revenue: data.revenue
+          // roas não é atualizado manualmente
         })
         .eq('id', existingMetric.id);
         
       if (updateError) throw updateError;
     } else {
       // Insert
+      // REMOVIDO: roas
       const { error: insertError } = await supabase
         .from('campaign_metrics')
         .insert([{
@@ -426,8 +500,7 @@ export const clientService = {
           impressions: data.impressions,
           clicks: data.clicks,
           leads: data.leads,
-          revenue: data.revenue,
-          roas: data.spend > 0 ? data.revenue / data.spend : 0
+          revenue: data.revenue
         }]);
       
       if (insertError) throw insertError;
