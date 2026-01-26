@@ -6,8 +6,9 @@ import { contractService } from '../services/contractService';
 import { dealService } from '../services/dealService';
 import { commercialService } from '../services/commercialService';
 import { aiAnalysisService } from '../services/aiAnalysisService';
-import { DollarSign, Target, TrendingUp, Calendar, Download, Loader2, Users, ShoppingBag, Plus, Copy, Check, BarChart, ChevronLeft, ChevronDown, Sparkles, PieChart, Link, ExternalLink, FileText, Briefcase, Search, Activity, Trash2, PenLine } from 'lucide-react';
+import { DollarSign, Target, TrendingUp, Calendar, Download, Loader2, Users, ShoppingBag, Plus, Copy, Check, BarChart, ChevronLeft, ChevronDown, Sparkles, PieChart, Link, ExternalLink, FileText, Briefcase, Search, Activity, Trash2, PenLine, Globe } from 'lucide-react';
 import { NewSaleModal } from './NewSaleModal';
+import { NewManualMetricModal } from './NewManualMetricModal';
 import { InsightsFeed } from './InsightsFeed';
 import ReactECharts from 'echarts-for-react';
 import * as echarts from 'echarts';
@@ -124,6 +125,7 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
   
   // UI State
   const [isSaleModalOpen, setIsSaleModalOpen] = useState(false);
+  const [isMetricModalOpen, setIsMetricModalOpen] = useState(false); // Novo Estado
   const [dealToEdit, setDealToEdit] = useState<Deal | null>(null); // Estado para edição
   const [copied, setCopied] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
@@ -894,6 +896,13 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
         dealToEdit={dealToEdit} // Passar a prop de edição
       />
 
+      <NewManualMetricModal
+        isOpen={isMetricModalOpen}
+        onClose={() => setIsMetricModalOpen(false)}
+        onSuccess={fetchData}
+        clientId={currentClient.id}
+      />
+
       {/* Header */}
       {loading ? (
         <HeaderSkeleton />
@@ -1039,8 +1048,14 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
                 <button onClick={handleCopyReport} className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-xs font-bold border transition-colors ${copied ? 'bg-green-50 text-green-700 border-green-200' : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'}`}>
                   {copied ? <Check size={14} /> : <Copy size={14} />} {copied ? 'Copiado' : 'Relatório'}
                 </button>
-                <button className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-indigo-700 shadow-sm">
-                  <Download size={14} /> PDF
+                
+                {/* Botão de Métricas Externas (Novo) */}
+                <button 
+                  onClick={() => setIsMetricModalOpen(true)}
+                  className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-blue-50 text-blue-700 border border-blue-200 px-4 py-2 rounded-lg text-xs font-bold hover:bg-blue-100 transition-colors shadow-sm"
+                  title="Adicionar métricas de outras plataformas (Google, TikTok, etc)"
+                >
+                  <Globe size={14} /> Externo
                 </button>
              </div>
           </div>

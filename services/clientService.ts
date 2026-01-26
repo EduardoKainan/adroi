@@ -11,16 +11,22 @@ export const getLocalDateString = (date: Date): string => {
 };
 
 export const clientService = {
-  // Busca pública apenas para validar o nome da empresa no formulário externo
+  // Busca pública (CORRIGIDO: Usa RPC para bypassar RLS de forma segura)
   async getClientPublicInfo(clientId: string) {
-    const { data, error } = await supabase
-      .from('clients')
-      .select('id, company, name, crm_enabled')
-      .eq('id', clientId)
-      .single();
+    const { data, error } = await supabase.rpc('get_client_public_info', { 
+      lookup_id: clientId 
+    });
     
-    if (error) return null;
-    return data;
+    if (error) {
+        console.error("Erro ao buscar info pública:", error);
+        return null;
+    }
+    
+    // RPC retorna um array, pegamos o primeiro item
+    if (data && data.length > 0) {
+        return data[0];
+    }
+    return null;
   },
 
   // Fetch all clients with aggregated real-time metrics filtered by date range
@@ -144,10 +150,6 @@ export const clientService = {
       const webhookUrl = 'https://n8nback.zapgestao.app.br/webhook/cadastroNovoCliente';
       console.log('🚀 Iniciando disparo do webhook (Modo No-CORS) para:', webhookUrl);
 
-      // Usamos mode: 'no-cors' para evitar bloqueios do navegador quando o servidor n8n
-      // não retorna os headers Access-Control-Allow-Origin corretos.
-      // O Content-Type deve ser text/plain para ser considerado "simple request" em alguns casos,
-      // mas enviamos o JSON stringify no corpo. O n8n receberá um body string.
       fetch(webhookUrl, {
         method: 'POST',
         mode: 'no-cors', 
@@ -163,8 +165,6 @@ export const clientService = {
         })
       })
       .then(() => {
-        // Em no-cors, a resposta é opaca (status 0), não temos como saber se foi 200 OK via JS.
-        // Mas sabemos que o browser enviou a requisição.
         console.log('✅ Webhook disparado (Resposta opaca devido a no-cors)');
       })
       .catch(err => {
@@ -343,4 +343,94 @@ export const clientService = {
       roas: d.spend > 0 ? Number((d.revenue / d.spend).toFixed(2)) : 0
     }));
   },
+
+  // --- NOVA FUNÇÃO: Adicionar Métrica Manual ---
+  async addManualPlatformMetric(
+    clientId: string, 
+    data: { 
+      platform: string, 
+      date: string, 
+      spend: number, 
+      impressions: number, 
+      clicks: number, 
+      leads: number, 
+      revenue: number 
+    }
+  ) {
+    const campaignName = `[Manual] ${data.platform}`;
+    
+    // 1. Verifica se já existe uma campanha para esta plataforma
+    let { data: existingCampaign } = await supabase
+      .from('campaigns')
+      .select('id')
+      .eq('client_id', clientId)
+      .eq('name', campaignName)
+      .single();
+
+    let campaignId = existingCampaign?.id;
+
+    // 2. Se não existe, cria a campanha
+    if (!campaignId) {
+      const { data: newCampaign, error: createError } = await supabase
+        .from('campaigns')
+        .insert([{
+          client_id: clientId,
+          name: campaignName,
+          status: 'ACTIVE',
+          objective: 'MANUAL_ENTRY',
+          spend: 0, // Iniciais
+          revenue: 0,
+          leads: 0,
+          purchases: 0,
+          roas: 0,
+          impressions: 0,
+          clicks: 0
+        }])
+        .select()
+        .single();
+      
+      if (createError) throw createError;
+      campaignId = newCampaign.id;
+    }
+
+    // 3. Verifica se já existe métrica para esta data nesta campanha
+    const { data: existingMetric } = await supabase
+      .from('campaign_metrics')
+      .select('id')
+      .eq('campaign_id', campaignId)
+      .eq('date', data.date)
+      .single();
+
+    if (existingMetric) {
+      // Update
+      const { error: updateError } = await supabase
+        .from('campaign_metrics')
+        .update({
+          spend: data.spend,
+          impressions: data.impressions,
+          clicks: data.clicks,
+          leads: data.leads,
+          revenue: data.revenue
+        })
+        .eq('id', existingMetric.id);
+        
+      if (updateError) throw updateError;
+    } else {
+      // Insert
+      const { error: insertError } = await supabase
+        .from('campaign_metrics')
+        .insert([{
+          campaign_id: campaignId,
+          date: data.date,
+          spend: data.spend,
+          impressions: data.impressions,
+          clicks: data.clicks,
+          leads: data.leads,
+          revenue: data.revenue,
+          roas: data.spend > 0 ? data.revenue / data.spend : 0
+        }]);
+      
+      if (insertError) throw insertError;
+    }
+  }
 };
