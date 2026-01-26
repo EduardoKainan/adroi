@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Project, Task, Goal, TaskCategory, Client } from '../types'; 
-import { Plus, MoreHorizontal, Calendar, Clock, ArrowRight, ArrowLeft, Trash2, PenLine, Target, AlertCircle, Briefcase, TrendingUp, CheckCircle2, GripVertical, X, ListTodo, ChevronRight } from 'lucide-react';
+import { Plus, MoreHorizontal, Calendar, Clock, ArrowRight, ArrowLeft, Trash2, PenLine, Target, AlertCircle, Briefcase, TrendingUp, CheckCircle2, GripVertical, X, ListTodo, ChevronRight, Eye, EyeOff } from 'lucide-react';
 import { NewTaskModal } from './NewTaskModal';
 import { NewProjectModal } from './NewProjectModal';
 
@@ -22,6 +22,9 @@ export const ProfessionalDashboard: React.FC<ProfessionalDashboardProps> = ({ pr
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
   const [dragOverColumn, setDragOverColumn] = useState<TaskCategory | null>(null);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
+  
+  // State para controlar visibilidade de tarefas concluídas
+  const [showCompleted, setShowCompleted] = useState(false);
   
   // Modal states
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
@@ -253,6 +256,16 @@ export const ProfessionalDashboard: React.FC<ProfessionalDashboardProps> = ({ pr
               Matriz de Prioridades
             </h3>
             <div className="flex gap-2">
+               {/* Botão de Toggle para Ver/Ocultar Feitas */}
+               <button 
+                 onClick={() => setShowCompleted(!showCompleted)}
+                 className={`text-xs font-medium px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1 border ${showCompleted ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-white text-slate-500 border-slate-200 hover:text-indigo-600'}`}
+                 title={showCompleted ? "Ocultar tarefas concluídas" : "Mostrar tarefas concluídas"}
+               >
+                 {showCompleted ? <EyeOff size={14} /> : <Eye size={14} />}
+                 {showCompleted ? 'Ocultar Feitas' : 'Ver Feitas'}
+               </button>
+
                <button 
                 onClick={() => openNewTaskModal('do_now')}
                 className="text-xs font-medium px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-lg hover:bg-indigo-100 transition-colors flex items-center gap-1"
@@ -270,7 +283,8 @@ export const ProfessionalDashboard: React.FC<ProfessionalDashboardProps> = ({ pr
             */}
             <div className="flex overflow-x-auto md:grid md:grid-cols-4 gap-4 md:h-full pb-4 md:pb-0 snap-x snap-mandatory md:snap-none custom-scrollbar">
               {columns.map((col) => {
-                const colTasks = tasks.filter(t => t.category === col.id);
+                // FILTRAGEM DE TAREFAS BASEADA NO TOGGLE
+                const colTasks = tasks.filter(t => t.category === col.id && (showCompleted || !t.completed));
                 const isOver = dragOverColumn === col.id;
 
                 return (
