@@ -32,13 +32,13 @@ export const Login: React.FC<LoginProps> = ({ onRegisterClick }) => {
     }
   };
 
+  const logoUrl = "https://file-service-full-211029272365.us-central1.run.app/static/1f2c6946-b6b8-472e-85b5-442b32252723/image.png";
+
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <div className="flex justify-center mb-6">
-           <div className="w-12 h-12 bg-indigo-600 rounded-xl flex items-center justify-center font-bold text-white shadow-lg text-xl">
-             AR
-           </div>
+           <img src={logoUrl} alt="AdRoi Logo" className="h-16 w-auto object-contain" />
         </div>
         <h2 className="text-center text-3xl font-extrabold text-slate-900">
           AdRoi SaaS

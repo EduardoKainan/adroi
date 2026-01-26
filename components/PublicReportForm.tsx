@@ -146,6 +146,8 @@ export const PublicReportForm: React.FC<PublicReportFormProps> = ({ clientId }) 
     }
   };
 
+  const logoUrl = "https://file-service-full-211029272365.us-central1.run.app/static/1f2c6946-b6b8-472e-85b5-442b32252723/image.png";
+
   if (loadingInfo) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
@@ -171,9 +173,7 @@ export const PublicReportForm: React.FC<PublicReportFormProps> = ({ clientId }) 
         
         {/* Header Fixo */}
         <div className="text-center mb-8">
-            <div className="w-12 h-12 bg-indigo-600 rounded-xl flex items-center justify-center font-bold text-white shadow-lg mx-auto mb-4">
-                AR
-            </div>
+            <img src={logoUrl} alt="AdRoi Logo" className="h-16 w-auto mx-auto mb-4 object-contain" />
             <h1 className="text-2xl font-bold text-slate-800">Olá, {clientInfo.name.split(' ')[0]}</h1>
             <p className="text-slate-500 mt-1">Check-in semanal da <span className="font-semibold text-indigo-600">{clientInfo.company}</span></p>
         </div>

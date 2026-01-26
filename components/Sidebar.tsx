@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { LayoutDashboard, Users, FileText, Settings, BarChart3, LogOut, CheckSquare, Menu, X, Briefcase } from 'lucide-react';
+import { LayoutDashboard, Users, FileText, Settings, BarChart3, LogOut, CheckSquare, Menu, X, HelpCircle } from 'lucide-react';
 import { ViewState } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -21,6 +21,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView }) =
     { id: 'REPORTS', label: 'Relatórios', icon: BarChart3 },
     { id: 'CONTRACTS', label: 'Contratos', icon: FileText },
     { id: 'SETTINGS', label: 'Configurações', icon: Settings, adminOnly: true },
+    { id: 'HELP', label: 'Ajuda & Tutoriais', icon: HelpCircle },
   ].filter(item => !item.adminOnly || profile?.role === 'admin');
 
   const handleNavItemClick = (viewId: ViewState) => {
@@ -32,14 +33,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView }) =
     ? profile.full_name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()
     : 'US';
 
+  const logoUrl = "https://file-service-full-211029272365.us-central1.run.app/static/1f2c6946-b6b8-472e-85b5-442b32252723/image.png";
+
   return (
     <>
       {/* --- MOBILE HEADER (Visible only on mobile) --- */}
       <header className="md:hidden fixed top-0 left-0 w-full h-16 bg-slate-900 text-white z-50 shadow-lg flex items-center justify-between px-4">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center font-bold text-white shadow-inner shadow-indigo-400/20">
-            AR
-          </div>
+          <img src={logoUrl} alt="AdRoi Logo" className="w-8 h-8 object-contain" />
           <div>
              <span className="text-lg font-bold tracking-tight block leading-none">AdRoi</span>
           </div>
@@ -57,9 +58,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView }) =
         
         {/* Logo Area */}
         <div className="h-20 flex items-center gap-3 px-6 border-b border-slate-800 shrink-0">
-          <div className="w-9 h-9 bg-indigo-600 rounded-lg flex items-center justify-center font-bold text-white text-lg shadow-inner shadow-indigo-400/20">
-            AR
-          </div>
+          <img src={logoUrl} alt="AdRoi Logo" className="w-10 h-10 object-contain" />
           <div className="min-w-0">
              <span className="text-xl font-bold tracking-tight block leading-none">AdRoi</span>
              {organization && <span className="text-[10px] text-slate-400 font-medium tracking-wide block truncate max-w-[140px]">{organization.name}</span>}

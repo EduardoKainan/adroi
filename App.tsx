@@ -6,6 +6,7 @@ import { ClientView } from './components/ClientView';
 import { ProfessionalDashboard } from './components/ProfessionalDashboard';
 import { SettingsView } from './components/SettingsView';
 import { PublicReportForm } from './components/PublicReportForm';
+import { HelpView } from './components/HelpView';
 import { Login } from './components/Login';
 import { Register } from './components/Register';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -138,7 +139,13 @@ const AppContent: React.FC = () => {
                 <span className="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider border border-indigo-100">
                   {profile?.role === 'admin' ? 'Admin' : 'Gestor'}
                 </span>
-                <span>AdRoi Workspace / <span className="text-slate-600 font-semibold">{currentView === 'DASHBOARD' ? 'Visão Geral' : currentView === 'CLIENT_DETAIL' ? 'Clientes' : currentView === 'TASKS' ? 'Tarefas' : 'Configurações'}</span></span>
+                <span>AdRoi Workspace / <span className="text-slate-600 font-semibold">{
+                  currentView === 'DASHBOARD' ? 'Visão Geral' : 
+                  currentView === 'CLIENT_DETAIL' ? 'Clientes' : 
+                  currentView === 'TASKS' ? 'Tarefas' : 
+                  currentView === 'HELP' ? 'Ajuda' : 
+                  'Configurações'}
+                </span></span>
               </div>
            </div>
         </header>
@@ -187,6 +194,10 @@ const AppContent: React.FC = () => {
 
         {currentView === 'SETTINGS' && (
           <SettingsView />
+        )}
+
+        {currentView === 'HELP' && (
+          <HelpView />
         )}
       </main>
     </div>
