@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { clientService, getLocalDateString } from '../services/clientService';
 import { contractService } from '../services/contractService';
 import { Client, Contract } from '../types';
-import { Search, Plus, MoreVertical, TrendingUp, AlertTriangle, Loader2, RefreshCw, Copy, Check, Calendar, ChevronRight, Trash2, PauseCircle, PlayCircle, PenLine, ChevronDown, DollarSign, Users, PieChart } from 'lucide-react';
+import { Search, Plus, MoreVertical, TrendingUp, AlertTriangle, Loader2, RefreshCw, Copy, Check, Calendar, ChevronRight, Trash2, PauseCircle, PlayCircle, PenLine, ChevronDown, DollarSign, Users, PieChart, Link } from 'lucide-react';
 import { NewClientModal } from './NewClientModal';
 import { OnboardingGuide } from './OnboardingGuide';
 import { toast } from 'sonner';
@@ -33,6 +33,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectClient }) => {
   const [showOnboarding, setShowOnboarding] = useState(false);
 
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [linkCopiedId, setLinkCopiedId] = useState<string | null>(null);
   const [copyingId, setCopyingId] = useState<string | null>(null);
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
 
@@ -197,6 +198,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectClient }) => {
     }
   };
 
+  const handleCopyLink = (e: React.MouseEvent, client: Client) => {
+    e.stopPropagation();
+    const url = `${window.location.origin}/report/${client.id}`;
+    navigator.clipboard.writeText(url);
+    setLinkCopiedId(client.id);
+    toast.success('Link de feedback copiado!');
+    setTimeout(() => setLinkCopiedId(null), 2000);
+  };
+
   const handleMenuToggle = (e: React.MouseEvent, clientId: string) => {
     e.stopPropagation();
     setActiveMenuId(prev => prev === clientId ? null : clientId);
@@ -251,7 +261,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectClient }) => {
     (c: Contract) => (c.days_remaining !== undefined) && c.days_remaining >= 0 && c.days_remaining <= 30
   ).length;
 
-  // Labels map for display
   const dateOptionLabels: Record<string, string> = {
     'YESTERDAY': 'Ontem',
     '7D': 'Últimos 7 dias',
@@ -277,7 +286,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectClient }) => {
         clientToEdit={clientToEdit}
       />
 
-      {/* Header Stats - Grid adaptável */}
+      {/* Header Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 md:gap-6">
         <div className="bg-indigo-600 rounded-xl p-5 md:p-6 text-white shadow-lg shadow-indigo-200">
           <div className="flex justify-between items-start mb-1">
@@ -450,6 +459,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectClient }) => {
                 const cpl = client.total_leads > 0 ? client.total_spend / client.total_leads : 0;
                 const isCopying = copyingId === client.id;
                 const isCopied = copiedId === client.id;
+                const isLinkCopied = linkCopiedId === client.id;
 
                 return (
                   <div 
@@ -558,14 +568,26 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectClient }) => {
 
                      {/* Footer Actions */}
                      <div className="px-5 py-3 border-t border-slate-100 bg-slate-50/50 flex justify-between items-center group-hover:bg-slate-50 transition-colors">
-                        <button 
-                           onClick={(e) => handleCopyReport(e, client)}
-                           disabled={isCopying}
-                           className={`text-xs font-bold flex items-center gap-1.5 px-2 py-1.5 rounded-lg transition-all ${isCopied ? 'bg-green-100 text-green-700' : 'text-slate-500 hover:text-indigo-600 hover:bg-white hover:shadow-sm'}`}
-                        >
-                           {isCopying ? <Loader2 size={12} className="animate-spin" /> : isCopied ? <Check size={12} /> : <Copy size={12} />}
-                           {isCopied ? 'Copiado' : 'Relatório'}
-                        </button>
+                        <div className="flex gap-2">
+                            <button 
+                                onClick={(e) => handleCopyReport(e, client)}
+                                disabled={isCopying}
+                                className={`text-xs font-bold flex items-center gap-1.5 px-2 py-1.5 rounded-lg transition-all ${isCopied ? 'bg-green-100 text-green-700' : 'text-slate-500 hover:text-indigo-600 hover:bg-white hover:shadow-sm'}`}
+                                title="Copiar relatório para WhatsApp"
+                            >
+                                {isCopying ? <Loader2 size={12} className="animate-spin" /> : isCopied ? <Check size={12} /> : <Copy size={12} />}
+                                {isCopied ? 'Copiado' : 'Relatório'}
+                            </button>
+
+                            <button 
+                                onClick={(e) => handleCopyLink(e, client)}
+                                className={`text-xs font-bold flex items-center gap-1.5 px-2 py-1.5 rounded-lg transition-all ${isLinkCopied ? 'bg-green-100 text-green-700' : 'text-slate-500 hover:text-blue-600 hover:bg-white hover:shadow-sm'}`}
+                                title="Copiar link para cliente preencher"
+                            >
+                                {isLinkCopied ? <Check size={12} /> : <Link size={12} />}
+                                {isLinkCopied ? 'Copiado' : 'Link'}
+                            </button>
+                        </div>
 
                         <div className="flex items-center text-xs font-bold text-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity transform translate-x-2 group-hover:translate-x-0">
                            Ver Dashboard <ChevronRight size={14} />

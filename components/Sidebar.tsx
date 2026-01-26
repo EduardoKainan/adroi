@@ -33,7 +33,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView }) =
     ? profile.full_name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()
     : 'US';
 
-  const logoUrl = "https://file-service-full-211029272365.us-central1.run.app/static/1f2c6946-b6b8-472e-85b5-442b32252723/image.png";
+  const logoUrl = "https://i.postimg.cc/wM5VGzBm/logo-adroi-(1).png";
 
   return (
     <>

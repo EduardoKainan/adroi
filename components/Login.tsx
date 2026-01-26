@@ -32,7 +32,7 @@ export const Login: React.FC<LoginProps> = ({ onRegisterClick }) => {
     }
   };
 
-  const logoUrl = "https://file-service-full-211029272365.us-central1.run.app/static/1f2c6946-b6b8-472e-85b5-442b32252723/image.png";
+  const logoUrl = "https://i.postimg.cc/wM5VGzBm/logo-adroi-(1).png";
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
