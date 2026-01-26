@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { 
   User, Building2, CreditCard, Users, Shield, 
-  Save, Loader2, CheckCircle, LogOut, Mail, Lock, Plus, Trash2, Clock, Eye, EyeOff, Key
+  Save, Loader2, CheckCircle, LogOut, Mail, Lock, Plus, Trash2, Clock, Eye, EyeOff, Key, Share2, AlertCircle
 } from 'lucide-react';
 import { UserProfile, OrganizationInvite } from '../types';
 import { toast } from 'sonner';
@@ -245,15 +245,25 @@ export const SettingsView: React.FC = () => {
 
   const renderOrganization = () => (
     <div className="space-y-6 animate-in fade-in duration-300">
-      <div>
-        <h2 className="text-xl font-bold text-slate-800">Configurações da Organização</h2>
-        <p className="text-sm text-slate-500">Detalhes visíveis nos relatórios e para a equipe.</p>
+      <div className="flex justify-between items-start">
+        <div>
+            <h2 className="text-xl font-bold text-slate-800">Configurações da Empresa</h2>
+            <p className="text-sm text-slate-500">Detalhes da organização e integrações de API.</p>
+        </div>
+        <div className={`px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 ${isAdmin ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-600'}`}>
+            <Shield size={14} />
+            {isAdmin ? 'Você é Admin' : 'Acesso Limitado'}
+        </div>
       </div>
 
       <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-6">
          {isAdmin ? (
-            <form onSubmit={handleUpdateOrg} className="space-y-6 max-w-lg">
+            <form onSubmit={handleUpdateOrg} className="space-y-8 max-w-xl">
+                {/* DADOS GERAIS */}
                 <div>
+                    <h3 className="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2 pb-2 border-b border-slate-100">
+                        <Building2 size={16} className="text-indigo-600" /> Dados Gerais
+                    </h3>
                     <label className="block text-sm font-medium text-slate-700 mb-1">Nome da Empresa / Agência</label>
                     <div className="relative">
                       <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
@@ -267,38 +277,51 @@ export const SettingsView: React.FC = () => {
                     <p className="text-xs text-slate-400 mt-1">Este nome aparecerá no cabeçalho dos relatórios públicos.</p>
                 </div>
 
-                <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Token da API do Facebook (Meta Ads)</label>
-                    <div className="relative">
-                      <Key className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                      <input 
-                          type={showMetaToken ? "text" : "password"}
-                          className="w-full pl-10 pr-12 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none font-mono text-sm"
-                          value={metaToken}
-                          onChange={(e) => setMetaToken(e.target.value)}
-                          placeholder="EAAB..."
-                      />
-                      <button 
-                        type="button"
-                        onClick={() => setShowMetaToken(!showMetaToken)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                      >
-                        {showMetaToken ? <EyeOff size={18} /> : <Eye size={18} />}
-                      </button>
+                {/* INTEGRAÇÕES */}
+                <div className="bg-slate-50 p-5 rounded-xl border border-slate-200">
+                    <h3 className="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2">
+                        <Share2 size={16} className="text-indigo-600" /> Integrações & API
+                    </h3>
+                    
+                    <div className="space-y-4">
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Token da API do Facebook (Meta Ads)</label>
+                            <div className="relative">
+                            <Key className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                            <input 
+                                type={showMetaToken ? "text" : "password"}
+                                className="w-full pl-10 pr-12 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none font-mono text-sm bg-white"
+                                value={metaToken}
+                                onChange={(e) => setMetaToken(e.target.value)}
+                                placeholder="EAAB..."
+                            />
+                            <button 
+                                type="button"
+                                onClick={() => setShowMetaToken(!showMetaToken)}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                            >
+                                {showMetaToken ? <EyeOff size={18} /> : <Eye size={18} />}
+                            </button>
+                            </div>
+                            <p className="text-xs text-slate-500 mt-2 flex gap-2">
+                                <AlertCircle size={14} className="text-blue-500 shrink-0 mt-0.5" />
+                                <span>
+                                    Este token será usado para sincronizar métricas de todos os clientes. 
+                                    Certifique-se que é um token de acesso de longa duração ("Long-lived Access Token").
+                                </span>
+                            </p>
+                        </div>
                     </div>
-                    <p className="text-xs text-slate-400 mt-1">
-                      Token de acesso de longa duração para integração com N8N/Webhook.
-                    </p>
                 </div>
                 
                 <div className="pt-2">
                     <button 
                     type="submit" 
                     disabled={loading}
-                    className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors font-medium disabled:opacity-70"
+                    className="flex items-center gap-2 bg-indigo-600 text-white px-6 py-2.5 rounded-lg hover:bg-indigo-700 transition-colors font-medium disabled:opacity-70 shadow-sm"
                     >
                     {loading ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
-                    Atualizar Empresa
+                    Salvar Alterações
                     </button>
                 </div>
             </form>
@@ -307,7 +330,7 @@ export const SettingsView: React.FC = () => {
                  <Shield className="shrink-0 mt-0.5" size={20} />
                  <div>
                      <h4 className="font-bold text-sm">Acesso Restrito</h4>
-                     <p className="text-sm">Apenas administradores podem alterar as configurações da organização.</p>
+                     <p className="text-sm">Apenas administradores podem alterar as configurações da organização e tokens de API.</p>
                  </div>
              </div>
          )}
@@ -522,7 +545,7 @@ export const SettingsView: React.FC = () => {
             onClick={() => setActiveTab('organization')}
             className={`w-full text-left px-4 py-3 rounded-lg flex items-center gap-3 transition-colors ${activeTab === 'organization' ? 'bg-white shadow-sm border border-slate-200 text-indigo-600 font-bold' : 'text-slate-500 hover:bg-slate-100'}`}
           >
-             <Building2 size={18} /> Organização
+             <Building2 size={18} /> Empresa & Integrações
           </button>
 
           <button 
