@@ -1,9 +1,11 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Project, Task, Goal, TaskCategory, Client } from '../types'; 
-import { Plus, MoreHorizontal, Calendar, Clock, ArrowRight, ArrowLeft, Trash2, PenLine, Target, AlertCircle, Briefcase, TrendingUp, CheckCircle2, GripVertical, X, ListTodo, ChevronRight, Eye, EyeOff } from 'lucide-react';
+import { Plus, MoreHorizontal, Calendar, Clock, ArrowRight, ArrowLeft, Trash2, PenLine, Target, AlertCircle, Briefcase, TrendingUp, CheckCircle2, GripVertical, X, ListTodo, ChevronRight, Eye, EyeOff, BarChart2, Layout, Filter } from 'lucide-react';
 import { NewTaskModal } from './NewTaskModal';
 import { NewProjectModal } from './NewProjectModal';
+import ReactECharts from 'echarts-for-react';
+import * as echarts from 'echarts';
 
 interface ProfessionalDashboardProps {
   projects: Project[];
@@ -25,6 +27,15 @@ export const ProfessionalDashboard: React.FC<ProfessionalDashboardProps> = ({ pr
   
   // State para controlar visibilidade de tarefas concluídas
   const [showCompleted, setShowCompleted] = useState(false);
+  
+  // State para alternar entre Kanban e Gráficos
+  const [viewMode, setViewMode] = useState<'board' | 'analytics'>('board');
+
+  // State para Filtro de Data (Analytics)
+  const [dateRange, setDateRange] = useState({
+    start: new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().split('T')[0], // Últimos 30 dias
+    end: new Date().toISOString().split('T')[0]
+  });
   
   // Modal states
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
@@ -128,6 +139,198 @@ export const ProfessionalDashboard: React.FC<ProfessionalDashboardProps> = ({ pr
       const completed = projectTasks.filter(t => t.completed).length;
       return Math.round((completed / total) * 100);
   };
+
+  // --- ECHARTS OPTIONS ---
+
+  // 1. Prioridade das Tarefas (Bar)
+  const getPriorityOption = useMemo(() => {
+    const high = tasks.filter(t => t.priority === 'high' && !t.completed).length;
+    const medium = tasks.filter(t => t.priority === 'medium' && !t.completed).length;
+    const low = tasks.filter(t => t.priority === 'low' && !t.completed).length;
+
+    return {
+      title: { text: 'Tarefas Pendentes por Prioridade', left: 'center', textStyle: { fontSize: 14, color: '#64748b' } },
+      tooltip: { trigger: 'item' },
+      xAxis: { type: 'category', data: ['Alta', 'Média', 'Baixa'], axisLine: { show: false }, axisTick: { show: false } },
+      yAxis: { type: 'value', splitLine: { lineStyle: { type: 'dashed' } } },
+      grid: { bottom: 30, top: 40, left: 40, right: 20 },
+      series: [
+        {
+          data: [
+            { value: high, itemStyle: { color: '#ef4444' } },
+            { value: medium, itemStyle: { color: '#eab308' } },
+            { value: low, itemStyle: { color: '#3b82f6' } }
+          ],
+          type: 'bar',
+          barWidth: '40%',
+          label: { show: true, position: 'top' },
+          itemStyle: { borderRadius: [4, 4, 0, 0] }
+        }
+      ]
+    };
+  }, [tasks]);
+
+  // 2. Progresso dos Projetos (Horizontal Bar)
+  const getProjectProgressChart = useMemo(() => {
+    const active = projects.filter(p => p.status === 'active').slice(0, 8); // Top 8 active
+    const titles = active.map(p => p.title.length > 15 ? p.title.substring(0, 15) + '...' : p.title);
+    const progressData = active.map(p => calculateProjectProgress(p.id, p.progress));
+
+    return {
+      title: { text: 'Progresso dos Projetos Ativos', left: 'center', textStyle: { fontSize: 14, color: '#64748b' } },
+      tooltip: { trigger: 'axis', formatter: '{b}: {c}%' },
+      grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+      xAxis: { type: 'value', max: 100, splitLine: { show: false } },
+      yAxis: { type: 'category', data: titles, axisTick: { show: false }, axisLine: { show: false } },
+      series: [
+        {
+          type: 'bar',
+          data: progressData,
+          barWidth: 15,
+          itemStyle: { 
+            color: new echarts.graphic.LinearGradient(1, 0, 0, 0, [{offset: 0, color: '#4f46e5'}, {offset: 1, color: '#818cf8'}]),
+            borderRadius: [0, 4, 4, 0]
+          },
+          label: { show: true, position: 'right', formatter: '{c}%' }
+        }
+      ]
+    };
+  }, [projects, tasks]);
+
+  // 3. Matriz de Tarefas (Donut)
+  const getMatrixOption = useMemo(() => {
+    const doNow = tasks.filter(t => t.category === 'do_now' && !t.completed).length;
+    const schedule = tasks.filter(t => t.category === 'schedule' && !t.completed).length;
+    const delegate = tasks.filter(t => t.category === 'delegate' && !t.completed).length;
+    const del = tasks.filter(t => t.category === 'delete' && !t.completed).length;
+
+    return {
+      title: { text: 'Distribuição na Matriz', left: 'center', top: '45%', textStyle: { fontSize: 12, color: '#64748b' } },
+      tooltip: { trigger: 'item' },
+      series: [
+        {
+          name: 'Categoria',
+          type: 'pie',
+          radius: ['50%', '70%'],
+          avoidLabelOverlap: false,
+          label: { show: false },
+          data: [
+            { value: doNow, name: 'Fazer (Do Now)', itemStyle: { color: '#ef4444' } },
+            { value: schedule, name: 'Agendar', itemStyle: { color: '#3b82f6' } },
+            { value: delegate, name: 'Delegar', itemStyle: { color: '#eab308' } },
+            { value: del, name: 'Eliminar', itemStyle: { color: '#94a3b8' } }
+          ]
+        }
+      ]
+    };
+  }, [tasks]);
+
+  // 4. Status Geral (Pie)
+  const getStatusOption = useMemo(() => {
+    return {
+      title: { text: 'Status Geral', left: 'center', textStyle: { fontSize: 14, color: '#64748b' } },
+      tooltip: { trigger: 'item' },
+      series: [
+        {
+          type: 'pie',
+          radius: '60%',
+          data: [
+            { value: completedTasks, name: 'Concluídas', itemStyle: { color: '#10b981' } },
+            { value: totalTasks - completedTasks, name: 'Pendentes', itemStyle: { color: '#6366f1' } }
+          ],
+          emphasis: {
+            itemStyle: {
+              shadowBlur: 10,
+              shadowOffsetX: 0,
+              shadowColor: 'rgba(0, 0, 0, 0.5)'
+            }
+          }
+        }
+      ]
+    };
+  }, [completedTasks, totalTasks]);
+
+  // 5. Tarefas por Cliente (Pendentes)
+  const getTasksByClientOption = useMemo(() => {
+    // Conta tarefas pendentes por cliente
+    const clientCounts: Record<string, number> = {};
+    tasks.filter(t => !t.completed).forEach(t => {
+        const name = t.clientName || 'Interno / Sem Cliente';
+        clientCounts[name] = (clientCounts[name] || 0) + 1;
+    });
+
+    // Converte para array e ordena (ascendente para gráfico de barras horizontal)
+    const sortedData = Object.entries(clientCounts)
+        .map(([name, value]) => ({ name, value }))
+        .sort((a, b) => a.value - b.value); 
+
+    const displayData = sortedData.slice(Math.max(0, sortedData.length - 10));
+
+    return {
+      title: { text: 'Tarefas Pendentes por Cliente', left: 'center', textStyle: { fontSize: 14, color: '#64748b' } },
+      tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+      grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+      xAxis: { type: 'value', splitLine: { show: false } },
+      yAxis: { type: 'category', data: displayData.map(d => d.name), axisTick: { show: false }, axisLine: { show: false } },
+      series: [
+        {
+          type: 'bar',
+          data: displayData.map(d => d.value),
+          barWidth: 15,
+          itemStyle: { 
+            color: '#8b5cf6', // Violeta
+            borderRadius: [0, 4, 4, 0]
+          },
+          label: { show: true, position: 'right' }
+        }
+      ]
+    };
+  }, [tasks]);
+
+  // 6. NOVO: Tarefas CONCLUÍDAS por Cliente (Com Filtro de Data)
+  const getCompletedTasksByClientOption = useMemo(() => {
+    const clientCounts: Record<string, number> = {};
+    
+    tasks.filter(t => {
+      // Filtra apenas concluídas
+      if (!t.completed) return false;
+      
+      // Filtra por data (Considerando dueDate como referência de entrega)
+      if (!t.dueDate) return false;
+      const taskDate = t.dueDate; // Formato YYYY-MM-DD
+      return taskDate >= dateRange.start && taskDate <= dateRange.end;
+    }).forEach(t => {
+        const name = t.clientName || 'Interno / Sem Cliente';
+        clientCounts[name] = (clientCounts[name] || 0) + 1;
+    });
+
+    const sortedData = Object.entries(clientCounts)
+        .map(([name, value]) => ({ name, value }))
+        .sort((a, b) => a.value - b.value); 
+
+    const displayData = sortedData.slice(Math.max(0, sortedData.length - 10));
+
+    return {
+      title: { text: 'Entregas Realizadas por Cliente (Período Selecionado)', left: 'center', textStyle: { fontSize: 14, color: '#64748b' } },
+      tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+      grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+      xAxis: { type: 'value', splitLine: { show: false } },
+      yAxis: { type: 'category', data: displayData.map(d => d.name), axisTick: { show: false }, axisLine: { show: false } },
+      series: [
+        {
+          type: 'bar',
+          data: displayData.map(d => d.value),
+          barWidth: 15,
+          itemStyle: { 
+            color: '#10b981', // Verde/Esmeralda
+            borderRadius: [0, 4, 4, 0]
+          },
+          label: { show: true, position: 'right' }
+        }
+      ]
+    };
+  }, [tasks, dateRange]);
+
 
   // Configuração das Colunas do Kanban
   const columns: {
@@ -248,27 +451,66 @@ export const ProfessionalDashboard: React.FC<ProfessionalDashboardProps> = ({ pr
       {/* --- Área Principal (Grid Dividido) --- */}
       <div className="flex-1 md:min-h-0 grid grid-cols-1 lg:grid-cols-12 gap-6">
         
-        {/* COLUNA ESQUERDA: Kanban (8 cols) */}
+        {/* COLUNA ESQUERDA: Kanban ou Gráficos (8 cols) */}
         <div className="lg:col-span-8 xl:col-span-9 flex flex-col md:min-h-0">
-          <div className="flex items-center justify-between mb-4 shrink-0">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 shrink-0 gap-2">
             <h3 className="font-bold text-slate-800 flex items-center gap-2">
               <AlertCircle size={18} className="text-indigo-600" />
-              Matriz de Prioridades
+              Gestão de Tarefas
             </h3>
-            <div className="flex gap-2">
-               {/* Botão de Toggle para Ver/Ocultar Feitas */}
-               <button 
-                 onClick={() => setShowCompleted(!showCompleted)}
-                 className={`text-xs font-medium px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1 border ${showCompleted ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-white text-slate-500 border-slate-200 hover:text-indigo-600'}`}
-                 title={showCompleted ? "Ocultar tarefas concluídas" : "Mostrar tarefas concluídas"}
-               >
-                 {showCompleted ? <EyeOff size={14} /> : <Eye size={14} />}
-                 {showCompleted ? 'Ocultar Feitas' : 'Ver Feitas'}
-               </button>
+            
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+               
+               {/* Date Filter (Only in Analytics) */}
+               {viewMode === 'analytics' && (
+                 <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-lg p-1 mr-2">
+                    <Calendar size={14} className="text-slate-400 ml-1" />
+                    <input 
+                      type="date" 
+                      className="text-xs border-none outline-none text-slate-600 bg-transparent w-[90px]"
+                      value={dateRange.start}
+                      onChange={(e) => setDateRange({...dateRange, start: e.target.value})}
+                    />
+                    <span className="text-slate-300">-</span>
+                    <input 
+                      type="date" 
+                      className="text-xs border-none outline-none text-slate-600 bg-transparent w-[90px]"
+                      value={dateRange.end}
+                      onChange={(e) => setDateRange({...dateRange, end: e.target.value})}
+                    />
+                 </div>
+               )}
+
+               {/* View Toggle */}
+               <div className="bg-slate-100 p-1 rounded-lg flex items-center">
+                  <button 
+                    onClick={() => setViewMode('board')}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'board' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                  >
+                    <Layout size={14} /> Quadro
+                  </button>
+                  <button 
+                    onClick={() => setViewMode('analytics')}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'analytics' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                  >
+                    <BarChart2 size={14} /> Análise
+                  </button>
+               </div>
+
+               {viewMode === 'board' && (
+                 <button 
+                   onClick={() => setShowCompleted(!showCompleted)}
+                   className={`text-xs font-medium px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1 border ${showCompleted ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-white text-slate-500 border-slate-200 hover:text-indigo-600'}`}
+                   title={showCompleted ? "Ocultar tarefas concluídas" : "Mostrar tarefas concluídas"}
+                 >
+                   {showCompleted ? <EyeOff size={14} /> : <Eye size={14} />}
+                   <span className="hidden sm:inline">{showCompleted ? 'Ocultar Feitas' : 'Ver Feitas'}</span>
+                 </button>
+               )}
 
                <button 
                 onClick={() => openNewTaskModal('do_now')}
-                className="text-xs font-medium px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-lg hover:bg-indigo-100 transition-colors flex items-center gap-1"
+                className="text-xs font-medium px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-lg hover:bg-indigo-100 transition-colors flex items-center gap-1 whitespace-nowrap ml-auto sm:ml-0"
                >
                  <Plus size={14} /> Nova Tarefa
                </button>
@@ -276,144 +518,199 @@ export const ProfessionalDashboard: React.FC<ProfessionalDashboardProps> = ({ pr
           </div>
 
           <div className="flex-1 md:min-h-0">
-            {/* 
-                ALTERAÇÃO AQUI: 
-                - Mobile: flex com overflow-x-auto (Scroll Horizontal)
-                - Desktop: grid normal
-            */}
-            <div className="flex overflow-x-auto md:grid md:grid-cols-4 gap-4 md:h-full pb-4 md:pb-0 snap-x snap-mandatory md:snap-none custom-scrollbar">
-              {columns.map((col) => {
-                // FILTRAGEM DE TAREFAS BASEADA NO TOGGLE
-                const colTasks = tasks.filter(t => t.category === col.id && (showCompleted || !t.completed));
-                const isOver = dragOverColumn === col.id;
+            {viewMode === 'board' ? (
+                /* --- KANBAN VIEW --- */
+                <div className="flex overflow-x-auto md:grid md:grid-cols-4 gap-4 md:h-full pb-4 md:pb-0 snap-x snap-mandatory md:snap-none custom-scrollbar">
+                {columns.map((col) => {
+                    // FILTRAGEM DE TAREFAS BASEADA NO TOGGLE
+                    const colTasks = tasks.filter(t => t.category === col.id && (showCompleted || !t.completed));
+                    const isOver = dragOverColumn === col.id;
 
-                return (
-                  <div 
-                    key={col.id} 
-                    className={`flex flex-col rounded-xl border transition-all duration-200 
-                      flex-shrink-0 w-[85vw] sm:w-[320px] md:w-auto snap-center
-                      h-[400px] md:h-full
-                      ${col.bgClass} 
-                      ${isOver ? 'ring-2 ring-indigo-400 ring-offset-2 scale-[1.01]' : col.borderClass}
-                    `}
-                    onDragOver={(e) => handleDragOver(e, col.id)}
-                    onDragLeave={handleDragLeave}
-                    onDrop={(e) => handleDrop(e, col.id)}
-                  >
-                    
-                    {/* Header Coluna */}
-                    <div className="p-3 flex items-center justify-between shrink-0 border-b border-black/5">
-                       <div className="flex items-center gap-2 overflow-hidden">
-                          <div className="shrink-0">{col.icon}</div>
-                          <div className="min-w-0">
-                            <h3 className={`font-bold text-xs truncate ${col.headerTextClass}`}>{col.title}</h3>
-                            <p className={`text-[9px] opacity-70 truncate ${col.headerTextClass}`}>{col.description}</p>
-                          </div>
-                       </div>
-                       <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded bg-white/60 ${col.headerTextClass}`}>
-                         {colTasks.length}
-                       </span>
-                    </div>
+                    return (
+                    <div 
+                        key={col.id} 
+                        className={`flex flex-col rounded-xl border transition-all duration-200 
+                        flex-shrink-0 w-[85vw] sm:w-[320px] md:w-auto snap-center
+                        h-[400px] md:h-full
+                        ${col.bgClass} 
+                        ${isOver ? 'ring-2 ring-indigo-400 ring-offset-2 scale-[1.01]' : col.borderClass}
+                        `}
+                        onDragOver={(e) => handleDragOver(e, col.id)}
+                        onDragLeave={handleDragLeave}
+                        onDrop={(e) => handleDrop(e, col.id)}
+                    >
+                        
+                        {/* Header Coluna */}
+                        <div className="p-3 flex items-center justify-between shrink-0 border-b border-black/5">
+                        <div className="flex items-center gap-2 overflow-hidden">
+                            <div className="shrink-0">{col.icon}</div>
+                            <div className="min-w-0">
+                                <h3 className={`font-bold text-xs truncate ${col.headerTextClass}`}>{col.title}</h3>
+                                <p className={`text-[9px] opacity-70 truncate ${col.headerTextClass}`}>{col.description}</p>
+                            </div>
+                        </div>
+                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded bg-white/60 ${col.headerTextClass}`}>
+                            {colTasks.length}
+                        </span>
+                        </div>
 
-                    {/* Lista Tarefas */}
-                    <div className="flex-1 overflow-y-auto p-2 space-y-2 custom-scrollbar">
-                      {colTasks.map(task => (
-                        <div 
-                          key={task.id} 
-                          className={`bg-white p-3 rounded-lg shadow-sm border border-slate-100 hover:shadow-md transition-all group relative cursor-grab active:cursor-grabbing
-                            ${draggedTaskId === task.id ? 'opacity-50 ring-2 ring-indigo-200 rotate-2' : ''}
-                          `}
-                          draggable
-                          onDragStart={(e) => handleDragStart(e, task.id)}
-                          // Open modal on double click for better UX
-                          onDoubleClick={() => openEditTaskModal(task)}
-                        >
-                          <div className="flex justify-between items-start mb-1.5">
-                            <div className="flex items-start gap-2">
-                              <button 
-                                onClick={() => onTaskToggle?.(task.id, !task.completed)}
-                                className={`mt-0.5 shrink-0 w-4 h-4 rounded-full border flex items-center justify-center transition-colors ${task.completed ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-slate-300 hover:border-indigo-400'}`}
-                              >
-                                {task.completed && <CheckCircle2 size={10} />}
-                              </button>
-                              <p className={`text-xs font-medium leading-snug pr-4 ${task.completed ? 'text-slate-400 line-through' : 'text-slate-800'}`}>
-                                {task.title}
-                              </p>
+                        {/* Lista Tarefas */}
+                        <div className="flex-1 overflow-y-auto p-2 space-y-2 custom-scrollbar">
+                        {colTasks.map(task => (
+                            <div 
+                            key={task.id} 
+                            className={`bg-white p-3 rounded-lg shadow-sm border border-slate-100 hover:shadow-md transition-all group relative cursor-grab active:cursor-grabbing
+                                ${draggedTaskId === task.id ? 'opacity-50 ring-2 ring-indigo-200 rotate-2' : ''}
+                            `}
+                            draggable
+                            onDragStart={(e) => handleDragStart(e, task.id)}
+                            // Open modal on double click for better UX
+                            onDoubleClick={() => openEditTaskModal(task)}
+                            >
+                            <div className="flex justify-between items-start mb-1.5">
+                                <div className="flex items-start gap-2">
+                                <button 
+                                    onClick={() => onTaskToggle?.(task.id, !task.completed)}
+                                    className={`mt-0.5 shrink-0 w-4 h-4 rounded-full border flex items-center justify-center transition-colors ${task.completed ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-slate-300 hover:border-indigo-400'}`}
+                                >
+                                    {task.completed && <CheckCircle2 size={10} />}
+                                </button>
+                                <p className={`text-xs font-medium leading-snug pr-4 ${task.completed ? 'text-slate-400 line-through' : 'text-slate-800'}`}>
+                                    {task.title}
+                                </p>
+                                </div>
+                                
+                                <div className="flex flex-col gap-1 absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <GripVertical size={14} className="text-slate-300" />
+                                
+                                {/* Edit Button */}
+                                <button 
+                                    onClick={(e) => {
+                                    e.stopPropagation();
+                                    openEditTaskModal(task);
+                                    }}
+                                    className="text-slate-300 hover:text-indigo-600 transition-colors"
+                                    title="Editar"
+                                >
+                                    <PenLine size={14} />
+                                </button>
+
+                                {/* Delete Button */}
+                                <button 
+                                    onClick={(e) => {
+                                    e.stopPropagation();
+                                    onTaskDelete?.(task.id);
+                                    }}
+                                    className="text-slate-300 hover:text-red-500 transition-colors"
+                                    title="Excluir"
+                                >
+                                    <Trash2 size={14} />
+                                </button>
+                                </div>
                             </div>
                             
-                            <div className="flex flex-col gap-1 absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                               <GripVertical size={14} className="text-slate-300" />
-                               
-                               {/* Edit Button */}
-                               <button 
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  openEditTaskModal(task);
-                                }}
-                                className="text-slate-300 hover:text-indigo-600 transition-colors"
-                                title="Editar"
-                               >
-                                 <PenLine size={14} />
-                               </button>
+                            {task.clientName && (
+                                <span className="inline-block text-[9px] font-semibold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded mb-2">
+                                {task.clientName}
+                                </span>
+                            )}
 
-                               {/* Delete Button */}
-                               <button 
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onTaskDelete?.(task.id);
-                                }}
-                                className="text-slate-300 hover:text-red-500 transition-colors"
-                                title="Excluir"
-                               >
-                                 <Trash2 size={14} />
-                               </button>
+                            <div className="flex items-center justify-between pt-2 border-t border-slate-50">
+                                <div className="flex gap-1">
+                                {col.id !== 'do_now' && (
+                                    <button 
+                                    onClick={() => onTaskMove?.(task.id, columns[Math.max(0, columns.findIndex(c => c.id === col.id) - 1)].id)}
+                                    title="Mover para esquerda"
+                                    >
+                                    <ArrowLeft size={12} className="text-slate-300 hover:text-indigo-600 cursor-pointer" />
+                                    </button>
+                                )}
+                                {col.id !== 'delete' && (
+                                    <button
+                                    onClick={() => onTaskMove?.(task.id, columns[Math.min(columns.length - 1, columns.findIndex(c => c.id === col.id) + 1)].id)}
+                                    title="Mover para direita"
+                                    >
+                                    <ArrowRight size={12} className="text-slate-300 hover:text-indigo-600 cursor-pointer" />
+                                    </button>
+                                )}
+                                </div>
+                                {col.id === 'do_now' && (
+                                <span className="text-[9px] font-bold text-red-600 bg-red-50 px-1.5 py-0.5 rounded flex items-center gap-1">
+                                    <Target size={10} /> Focar
+                                </span>
+                                )}
                             </div>
-                          </div>
-                          
-                          {task.clientName && (
-                            <span className="inline-block text-[9px] font-semibold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded mb-2">
-                              {task.clientName}
-                            </span>
-                          )}
-
-                          <div className="flex items-center justify-between pt-2 border-t border-slate-50">
-                             <div className="flex gap-1">
-                               {col.id !== 'do_now' && (
-                                 <button 
-                                  onClick={() => onTaskMove?.(task.id, columns[Math.max(0, columns.findIndex(c => c.id === col.id) - 1)].id)}
-                                  title="Mover para esquerda"
-                                 >
-                                   <ArrowLeft size={12} className="text-slate-300 hover:text-indigo-600 cursor-pointer" />
-                                 </button>
-                               )}
-                               {col.id !== 'delete' && (
-                                 <button
-                                   onClick={() => onTaskMove?.(task.id, columns[Math.min(columns.length - 1, columns.findIndex(c => c.id === col.id) + 1)].id)}
-                                   title="Mover para direita"
-                                 >
-                                   <ArrowRight size={12} className="text-slate-300 hover:text-indigo-600 cursor-pointer" />
-                                 </button>
-                               )}
-                             </div>
-                             {col.id === 'do_now' && (
-                               <span className="text-[9px] font-bold text-red-600 bg-red-50 px-1.5 py-0.5 rounded flex items-center gap-1">
-                                 <Target size={10} /> Focar
-                               </span>
-                             )}
-                          </div>
+                            </div>
+                        ))}
+                        <button 
+                            onClick={() => openNewTaskModal(col.id)}
+                            className={`w-full py-1.5 text-[10px] font-medium border border-dashed rounded text-center opacity-60 hover:opacity-100 transition-opacity ${col.headerTextClass} ${col.borderClass}`}
+                        >
+                            + Adicionar
+                        </button>
                         </div>
-                      ))}
-                      <button 
-                        onClick={() => openNewTaskModal(col.id)}
-                        className={`w-full py-1.5 text-[10px] font-medium border border-dashed rounded text-center opacity-60 hover:opacity-100 transition-opacity ${col.headerTextClass} ${col.borderClass}`}
-                      >
-                        + Adicionar
-                      </button>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
+                    );
+                })}
+                </div>
+            ) : (
+                /* --- ANALYTICS VIEW --- */
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-full overflow-y-auto animate-in fade-in pb-10">
+                    {/* 1. Prioridades */}
+                    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm min-h-[300px]">
+                        <ReactECharts 
+                            option={getPriorityOption}
+                            style={{ height: '100%', width: '100%' }}
+                            opts={{ renderer: 'svg' }}
+                        />
+                    </div>
+
+                    {/* 2. Progresso de Projetos */}
+                    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm min-h-[300px]">
+                        <ReactECharts 
+                            option={getProjectProgressChart}
+                            style={{ height: '100%', width: '100%' }}
+                            opts={{ renderer: 'svg' }}
+                        />
+                    </div>
+
+                    {/* 3. Distribuição Matriz */}
+                    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm min-h-[300px]">
+                        <ReactECharts 
+                            option={getMatrixOption}
+                            style={{ height: '100%', width: '100%' }}
+                            opts={{ renderer: 'svg' }}
+                        />
+                    </div>
+
+                    {/* 4. Status Geral */}
+                    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm min-h-[300px]">
+                        <ReactECharts 
+                            option={getStatusOption}
+                            style={{ height: '100%', width: '100%' }}
+                            opts={{ renderer: 'svg' }}
+                        />
+                    </div>
+
+                    {/* 5. Tarefas por Cliente (Wide - Pendentes) */}
+                    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm min-h-[350px] lg:col-span-2">
+                        <ReactECharts 
+                            option={getTasksByClientOption}
+                            style={{ height: '100%', width: '100%' }}
+                            opts={{ renderer: 'svg' }}
+                        />
+                    </div>
+
+                    {/* 6. Tarefas CONCLUÍDAS por Cliente (Wide - Com Filtro) */}
+                    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm min-h-[350px] lg:col-span-2">
+                        <ReactECharts 
+                            option={getCompletedTasksByClientOption}
+                            style={{ height: '100%', width: '100%' }}
+                            opts={{ renderer: 'svg' }}
+                        />
+                    </div>
+                </div>
+            )}
           </div>
         </div>
 
