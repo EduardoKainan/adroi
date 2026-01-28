@@ -1,5 +1,6 @@
 
 export enum UserRole {
+  SUPER_ADMIN = 'super_admin',
   ADMIN = 'admin',
   MANAGER = 'manager',
   CLIENT = 'client'
@@ -16,7 +17,7 @@ export interface Organization {
 export interface UserProfile {
   id: string;
   organization_id: string;
-  role: 'admin' | 'manager' | 'client';
+  role: 'super_admin' | 'admin' | 'manager' | 'client';
   full_name?: string;
   email?: string;
 }
@@ -28,6 +29,26 @@ export interface OrganizationInvite {
   role: 'admin' | 'manager';
   created_at: string;
   status: 'pending' | 'accepted';
+}
+
+// Interfaces do Super Admin
+export interface AdminOrgMetric {
+  id: string;
+  name: string;
+  created_at: string;
+  total_users: number;
+  total_clients: number;
+  total_projects: number;
+  status: 'active' | 'inactive'; // Simulação de status de assinatura
+}
+
+export interface AdminUserMetric {
+  id: string;
+  email: string;
+  full_name: string;
+  role: string;
+  organization_name: string;
+  last_sign_in?: string;
 }
 
 export interface Client {
@@ -170,4 +191,4 @@ export interface Goal {
   status: 'on_track' | 'at_risk' | 'completed';
 }
 
-export type ViewState = 'DASHBOARD' | 'CLIENT_DETAIL' | 'SETTINGS' | 'TASKS' | 'HELP';
+export type ViewState = 'DASHBOARD' | 'CLIENT_DETAIL' | 'SETTINGS' | 'TASKS' | 'HELP' | 'SUPER_ADMIN';

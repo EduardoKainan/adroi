@@ -7,6 +7,7 @@ import { ProfessionalDashboard } from './components/ProfessionalDashboard';
 import { SettingsView } from './components/SettingsView';
 import { PublicReportForm } from './components/PublicReportForm';
 import { HelpView } from './components/HelpView';
+import { SuperAdminDashboard } from './components/SuperAdminDashboard'; // Import
 import { Login } from './components/Login';
 import { Register } from './components/Register';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -136,13 +137,15 @@ const AppContent: React.FC = () => {
               
               <div className="text-sm text-slate-400 flex items-center gap-2 mt-1">
                 {/* Exibe papel do usuário para debug/confirmação visual */}
-                <span className="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider border border-indigo-100">
-                  {profile?.role === 'admin' ? 'Admin' : 'Gestor'}
+                <span className={`px-2 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider border 
+                  ${profile?.role === 'super_admin' ? 'bg-red-50 text-red-700 border-red-100' : 'bg-indigo-50 text-indigo-700 border-indigo-100'}`}>
+                  {profile?.role === 'super_admin' ? 'Super Admin' : profile?.role === 'admin' ? 'Admin' : 'Gestor'}
                 </span>
                 <span>AdRoi Workspace / <span className="text-slate-600 font-semibold">{
                   currentView === 'DASHBOARD' ? 'Visão Geral' : 
                   currentView === 'CLIENT_DETAIL' ? 'Clientes' : 
                   currentView === 'TASKS' ? 'Tarefas' : 
+                  currentView === 'SUPER_ADMIN' ? 'Super Admin' :
                   currentView === 'HELP' ? 'Ajuda' : 
                   'Configurações'}
                 </span></span>
@@ -198,6 +201,10 @@ const AppContent: React.FC = () => {
 
         {currentView === 'HELP' && (
           <HelpView />
+        )}
+
+        {currentView === 'SUPER_ADMIN' && profile?.role === 'super_admin' && (
+          <SuperAdminDashboard />
         )}
       </main>
     </div>

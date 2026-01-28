@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { LayoutDashboard, Users, FileText, Settings, BarChart3, LogOut, CheckSquare, Menu, X, HelpCircle } from 'lucide-react';
+import { LayoutDashboard, Users, FileText, Settings, BarChart3, LogOut, CheckSquare, Menu, X, HelpCircle, ShieldAlert } from 'lucide-react';
 import { ViewState } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -22,7 +22,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView }) =
     { id: 'CONTRACTS', label: 'Contratos', icon: FileText },
     { id: 'SETTINGS', label: 'Configurações', icon: Settings, adminOnly: true },
     { id: 'HELP', label: 'Ajuda & Tutoriais', icon: HelpCircle },
-  ].filter(item => !item.adminOnly || profile?.role === 'admin');
+    { id: 'SUPER_ADMIN', label: 'Super Admin', icon: ShieldAlert, superAdminOnly: true },
+  ].filter(item => {
+      if (item.superAdminOnly) return profile?.role === 'super_admin';
+      if (item.adminOnly) return profile?.role === 'admin' || profile?.role === 'super_admin';
+      return true;
+  });
 
   const handleNavItemClick = (viewId: ViewState) => {
     onChangeView(viewId);
@@ -70,6 +75,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView }) =
           {menuItems.map((item) => {
             const Icon = item.icon;
             const isActive = currentView === item.id || (currentView === 'CLIENT_DETAIL' && item.id === 'CLIENT_DETAIL');
+            // @ts-ignore - Check for custom prop
+            const isSuper = item.superAdminOnly;
             
             return (
               <button
@@ -78,10 +85,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView }) =
                 className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 group relative ${
                   isActive 
                     ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/20' 
-                    : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+                    : isSuper ? 'text-red-300 hover:bg-red-900/30 hover:text-red-100' : 'text-slate-400 hover:bg-slate-800 hover:text-white'
                 }`}
               >
-                <Icon size={20} className={isActive ? 'text-white' : 'text-slate-500 group-hover:text-white transition-colors'} />
+                <Icon size={20} className={isActive ? 'text-white' : isSuper ? 'text-red-400' : 'text-slate-500 group-hover:text-white transition-colors'} />
                 <span>{item.label}</span>
                 {isActive && <div className="absolute right-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-white/20 rounded-l-full"></div>}
               </button>

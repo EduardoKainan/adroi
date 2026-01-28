@@ -242,15 +242,15 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
   }, [dateOption]);
 
   const calculateFilteredStats = () => {
-     // 1. Ads Metrics
-     const adSpend = campaigns.reduce((acc, c) => acc + (c.spend || 0), 0);
-     const adRevenue = campaigns.reduce((acc, c) => acc + (c.revenue || 0), 0);
-     const totalLeads = campaigns.reduce((acc, c) => acc + (c.leads || 0), 0);
+     // 1. Ads Metrics (Conversão segura para Number para evitar concatenação de strings)
+     const adSpend = campaigns.reduce((acc, c) => acc + Number(c.spend || 0), 0);
+     const adRevenue = campaigns.reduce((acc, c) => acc + Number(c.revenue || 0), 0);
+     const totalLeads = campaigns.reduce((acc, c) => acc + Number(c.leads || 0), 0);
 
-     // 2. Offline Metrics (Filtered by date)
+     // 2. Offline Metrics (Filtered by date & Secure Number conversion)
      const offlineRevenue = deals
         .filter(d => d.date >= dateRange.start && d.date <= dateRange.end)
-        .reduce((acc, d) => acc + (d.total_value || 0), 0);
+        .reduce((acc, d) => acc + Number(d.total_value || 0), 0);
 
      // 3. Blended Totals
      const totalRevenue = adRevenue + offlineRevenue;
