@@ -6,10 +6,11 @@ import { contractService } from '../services/contractService';
 import { dealService } from '../services/dealService';
 import { commercialService } from '../services/commercialService';
 import { aiAnalysisService } from '../services/aiAnalysisService';
-import { DollarSign, Target, TrendingUp, Calendar, Download, Loader2, Users, ShoppingBag, Plus, Copy, Check, BarChart, ChevronLeft, ChevronDown, Sparkles, PieChart, Link, ExternalLink, FileText, Briefcase, Search, Activity, Trash2, PenLine, Globe, Layers } from 'lucide-react';
+import { DollarSign, Target, TrendingUp, Calendar, Download, Loader2, Users, ShoppingBag, Plus, Copy, Check, BarChart, ChevronLeft, ChevronDown, Sparkles, PieChart, Link, ExternalLink, FileText, Briefcase, Search, Activity, Trash2, PenLine, Globe, Layers, StickyNote } from 'lucide-react';
 import { NewSaleModal } from './NewSaleModal';
 import { NewManualMetricModal } from './NewManualMetricModal';
 import { InsightsFeed } from './InsightsFeed';
+import { ClientNotes } from './ClientNotes'; // Importando o novo componente
 import ReactECharts from 'echarts-for-react';
 import * as echarts from 'echarts';
 import { toast } from 'sonner';
@@ -133,7 +134,7 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
   const [dealToEdit, setDealToEdit] = useState<Deal | null>(null); // Estado para edição
   const [copied, setCopied] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
-  const [crmListTab, setCrmListTab] = useState<'deals' | 'activities'>('deals');
+  const [crmListTab, setCrmListTab] = useState<'deals' | 'activities' | 'notes'>('deals'); // Nova opção 'notes'
   const [activePlatformTab, setActivePlatformTab] = useState<string>('ALL'); // Estado para abas de gráficos
   
   // Header Dropdown State
@@ -689,7 +690,7 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
           name: 'Funnel',
           type: 'funnel',
           left: '10%', right: '10%', top: 40, bottom: 20, width: '80%', minSize: '0%', maxSize: '100%', sort: 'none', gap: 6,
-          label: { show: true, position: 'inside', formatter: (params: any) => `{value|${(params.data.realValue as number).toLocaleString()}}\n{title|${params.name as string}}`, rich: { title: { color: 'rgba(255,255,255,0.9)', fontSize: 10, fontWeight: 'bold' }, value: { color: '#fff', fontSize: 16, fontWeight: 800 } } },
+          label: { show: true, position: 'inside', formatter: (params: any) => `{value|${Number(params.data.realValue).toLocaleString()}}\n{title|${String(params.name)}}`, rich: { title: { color: 'rgba(255,255,255,0.9)', fontSize: 10, fontWeight: 'bold' }, value: { color: '#fff', fontSize: 16, fontWeight: 800 } } },
           data: data.map((d, i) => ({ value: d.value || 1, name: d.name, realValue: d.realValue, itemStyle: { color: colors[i] } }))
       }]
     };
@@ -737,7 +738,7 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
           name: 'Funnel',
           type: 'funnel',
           left: '10%', right: '10%', top: 40, bottom: 20, width: '80%', minSize: '0%', maxSize: '100%', sort: 'none', gap: 6,
-          label: { show: true, position: 'inside', formatter: (params: any) => `{value|${(params.data.realValue as number).toLocaleString()}}\n{title|${params.name as string}}`, rich: { title: { color: 'rgba(255,255,255,0.9)', fontSize: 10, fontWeight: 'bold' }, value: { color: '#fff', fontSize: 16, fontWeight: 800 } } },
+          label: { show: true, position: 'inside', formatter: (params: any) => `{value|${Number(params.data.realValue).toLocaleString()}}\n{title|${String(params.name)}}`, rich: { title: { color: 'rgba(255,255,255,0.9)', fontSize: 10, fontWeight: 'bold' }, value: { color: '#fff', fontSize: 16, fontWeight: 800 } } },
           data: data.map((d, i) => ({ value: d.value || 1, name: d.name, realValue: d.realValue, itemStyle: { color: colors[i] } }))
       }]
     };
@@ -914,7 +915,7 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
                 </div>
             </>
         );
-    } else {
+    } else if (crmListTab === 'activities') {
         // Lista de Atividades (CRM)
         const filteredActs = activities.filter(a => a.date >= dateRange.start && a.date <= dateRange.end);
         
@@ -977,6 +978,9 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
                 </div>
             </>
         );
+    } else {
+        // --- ABA DE ANOTAÇÕES (NOVO) ---
+        return <ClientNotes clientId={currentClient.id} />;
     }
   };
 
@@ -1315,31 +1319,39 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
         </div>
       )}
 
-      {/* CRM / Vendas Panel */}
+      {/* CRM / Vendas Panel / Anotações */}
       {loading ? (
         <SalesSkeleton />
       ) : (
-        <div className="bg-white p-4 md:p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col w-full">
+        <div className="bg-white p-4 md:p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col w-full min-h-[400px]">
              
              {/* Header com Abas */}
-             <div className="flex justify-between items-start mb-4">
-                <div className="flex gap-2">
-                    {currentClient.crm_enabled ? (
-                        <div className="bg-slate-100 p-1 rounded-lg flex gap-1">
-                            <button 
-                                onClick={() => setCrmListTab('deals')}
-                                className={`px-3 py-1 text-[10px] font-bold rounded transition-all ${crmListTab === 'deals' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}
-                            >
-                                Vendas
-                            </button>
-                            <button 
-                                onClick={() => setCrmListTab('activities')}
-                                className={`px-3 py-1 text-[10px] font-bold rounded transition-all ${crmListTab === 'activities' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}
-                            >
-                                Atividades
-                            </button>
-                        </div>
-                    ) : null}
+             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-2">
+                <div className="flex gap-2 w-full sm:w-auto">
+                    <div className="bg-slate-100 p-1 rounded-lg flex gap-1 w-full sm:w-auto">
+                        {currentClient.crm_enabled && (
+                            <>
+                                <button 
+                                    onClick={() => setCrmListTab('deals')}
+                                    className={`flex-1 sm:flex-none px-3 py-1.5 text-xs font-bold rounded-md transition-all ${crmListTab === 'deals' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                                >
+                                    Vendas
+                                </button>
+                                <button 
+                                    onClick={() => setCrmListTab('activities')}
+                                    className={`flex-1 sm:flex-none px-3 py-1.5 text-xs font-bold rounded-md transition-all ${crmListTab === 'activities' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                                >
+                                    Atividades
+                                </button>
+                            </>
+                        )}
+                        <button 
+                            onClick={() => setCrmListTab('notes')}
+                            className={`flex-1 sm:flex-none px-3 py-1.5 text-xs font-bold rounded-md transition-all flex items-center justify-center gap-1 ${crmListTab === 'notes' ? 'bg-white text-amber-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                        >
+                            <StickyNote size={12} /> Anotações
+                        </button>
+                    </div>
                 </div>
 
                 <div className="flex gap-2">
@@ -1353,7 +1365,9 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
                 </div>
              </div>
              
-             {renderSidePanelContent()}
+             <div className="flex-1">
+                {renderSidePanelContent()}
+             </div>
              
         </div>
       )}

@@ -55,6 +55,17 @@ export interface Client {
   crm_enabled?: boolean;
 }
 
+export interface ClientNote {
+  id: string;
+  client_id: string;
+  organization_id?: string;
+  title: string;
+  content: string;
+  date: string; // Data do evento/reunião
+  created_at?: string;
+  is_pinned?: boolean;
+}
+
 export interface Insight {
   id?: string;
   organization_id?: string;
