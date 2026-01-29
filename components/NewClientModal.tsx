@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { X, Save, Loader2, Target, DollarSign, Wallet, Briefcase } from 'lucide-react';
+import { X, Save, Loader2, Target, DollarSign, Wallet, Briefcase, CreditCard } from 'lucide-react';
 import { clientService } from '../services/clientService';
 import { Client } from '../types';
 import { toast } from 'sonner';
@@ -22,7 +22,9 @@ export const NewClientModal: React.FC<NewClientModalProps> = ({ isOpen, onClose,
     target_roas: '',
     target_cpa: '',
     budget_limit: '',
-    crm_enabled: false // Novo campo
+    crm_enabled: false,
+    is_prepaid: false, // Default Pós-pago
+    current_balance: ''
   });
 
   useEffect(() => {
@@ -36,13 +38,17 @@ export const NewClientModal: React.FC<NewClientModalProps> = ({ isOpen, onClose,
           target_roas: clientToEdit.target_roas?.toString() || '',
           target_cpa: clientToEdit.target_cpa?.toString() || '',
           budget_limit: clientToEdit.budget_limit?.toString() || '',
-          crm_enabled: clientToEdit.crm_enabled || false
+          crm_enabled: clientToEdit.crm_enabled || false,
+          is_prepaid: clientToEdit.is_prepaid || false,
+          current_balance: clientToEdit.current_balance?.toString() || ''
         });
       } else {
         setFormData({ 
           name: '', company: '', email: '', ad_account_id: '', 
           target_roas: '', target_cpa: '', budget_limit: '',
-          crm_enabled: false
+          crm_enabled: false,
+          is_prepaid: false,
+          current_balance: ''
         });
       }
     }
@@ -58,7 +64,8 @@ export const NewClientModal: React.FC<NewClientModalProps> = ({ isOpen, onClose,
         ...formData,
         target_roas: formData.target_roas ? Number(formData.target_roas) : undefined,
         target_cpa: formData.target_cpa ? Number(formData.target_cpa) : undefined,
-        budget_limit: formData.budget_limit ? Number(formData.budget_limit) : undefined
+        budget_limit: formData.budget_limit ? Number(formData.budget_limit) : undefined,
+        current_balance: formData.current_balance ? Number(formData.current_balance) : 0
       };
 
       if (clientToEdit) {
@@ -71,7 +78,8 @@ export const NewClientModal: React.FC<NewClientModalProps> = ({ isOpen, onClose,
       onClose();
       if (!clientToEdit) setFormData({ 
         name: '', company: '', email: '', ad_account_id: '', 
-        target_roas: '', target_cpa: '', budget_limit: '', crm_enabled: false
+        target_roas: '', target_cpa: '', budget_limit: '', crm_enabled: false,
+        is_prepaid: false, current_balance: ''
       });
       toast.success(`Cliente ${clientToEdit ? 'atualizado' : 'criado'} com sucesso!`);
       
@@ -87,7 +95,7 @@ export const NewClientModal: React.FC<NewClientModalProps> = ({ isOpen, onClose,
       }
 
       if (message.includes('column') && message.includes('does not exist')) {
-        message = `Erro de Banco de Dados: Colunas novas ausentes (target_roas ou crm_enabled).`;
+        message = `Erro de Banco de Dados: Colunas novas ausentes (Execute o script add_balance_columns.sql).`;
       }
 
       toast.error(`Erro ao ${clientToEdit ? 'atualizar' : 'criar'} cliente: ${message}`);
@@ -158,6 +166,51 @@ export const NewClientModal: React.FC<NewClientModalProps> = ({ isOpen, onClose,
                   onChange={e => setFormData({...formData, ad_account_id: e.target.value})}
                 />
               </div>
+            </div>
+          </div>
+
+          {/* Seção Financeira (Novo) */}
+          <div className="pt-4 border-t border-slate-100 space-y-4">
+            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-2">
+               <Wallet size={14} /> Modelo Financeiro
+            </h4>
+            
+            <div className="grid grid-cols-2 gap-4">
+                <div>
+                    <label className="block text-xs font-bold text-slate-600 mb-2">Tipo de Pagamento</label>
+                    <div className="flex bg-slate-100 p-1 rounded-lg">
+                        <button
+                            type="button"
+                            onClick={() => setFormData({...formData, is_prepaid: false})}
+                            className={`flex-1 flex items-center justify-center gap-1 py-1.5 text-xs font-bold rounded-md transition-all ${!formData.is_prepaid ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}
+                        >
+                            <CreditCard size={12} /> Pós-pago
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setFormData({...formData, is_prepaid: true})}
+                            className={`flex-1 flex items-center justify-center gap-1 py-1.5 text-xs font-bold rounded-md transition-all ${formData.is_prepaid ? 'bg-white text-orange-600 shadow-sm' : 'text-slate-500'}`}
+                        >
+                            <Wallet size={12} /> Pré-pago
+                        </button>
+                    </div>
+                </div>
+                <div>
+                    <label className="block text-xs font-bold text-slate-600 mb-1">
+                        {formData.is_prepaid ? 'Saldo Atual' : 'Saldo / Fatura'}
+                    </label>
+                    <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">R$</span>
+                        <input 
+                            type="number" 
+                            step="0.01"
+                            className="w-full pl-8 pr-2 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
+                            placeholder="0.00"
+                            value={formData.current_balance}
+                            onChange={e => setFormData({...formData, current_balance: e.target.value})}
+                        />
+                    </div>
+                </div>
             </div>
           </div>
 

@@ -74,6 +74,10 @@ export interface Client {
 
   // CRM Lite Feature Flag
   crm_enabled?: boolean;
+
+  // Controle Financeiro
+  current_balance?: number;
+  is_prepaid?: boolean;
 }
 
 export interface ClientNote {

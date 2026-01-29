@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { Client, Contract, Campaign, DailyMetric, Deal, Insight, CommercialActivity } from '../types';
 import { clientService, getLocalDateString, PlatformMetric } from '../services/clientService';
@@ -168,7 +167,8 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
       'Outros': '#64748b'
   };
 
-  const getPlatformColor = (platform: string) => {
+  const getPlatformColor = (platformName: any) => {
+      const platform = String(platformName || '');
       if (platformColors[platform]) return platformColors[platform];
       // Fallback para cores conhecidas parciais
       if (platform.includes('Meta') || platform.includes('Facebook')) return platformColors['Meta Ads'];
@@ -178,7 +178,8 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
   };
 
   // Helper para identificar plataforma do nome da campanha
-  const getPlatformFromCampaignName = (name: string): string => {
+  const getPlatformFromCampaignName = (nameArg: any): string => {
+      const name = String(nameArg || '');
       const lower = name.toLowerCase();
       if (lower.includes('google')) return 'Google Ads';
       if (lower.includes('tiktok')) return 'TikTok Ads';
@@ -337,7 +338,7 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
             const dealsData = await dealService.getDeals(currentClient.id);
             setDeals(dealsData);
             toast.success("Venda excluída.");
-        } catch (error) {
+        } catch (error: any) {
             console.error("Erro ao deletar venda", error);
             toast.error("Erro ao excluir venda.");
         }
@@ -380,7 +381,7 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
            setInsights(generatedInsights);
            toast.error("IA Indisponível no momento.");
        }
-     } catch (e) {
+     } catch (e: any) {
        console.error("Erro ao gerar insights", e);
        toast.error("Erro ao gerar análise.");
      } finally {
@@ -392,7 +393,7 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
     try {
         await aiAnalysisService.deleteInsight(id);
         setInsights(prev => prev.filter(i => i.id !== id));
-    } catch (error) {
+    } catch (error: any) {
         console.error("Erro ao excluir insight", error);
     }
   };
@@ -690,7 +691,16 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
           name: 'Funnel',
           type: 'funnel',
           left: '10%', right: '10%', top: 40, bottom: 20, width: '80%', minSize: '0%', maxSize: '100%', sort: 'none', gap: 6,
-          label: { show: true, position: 'inside', formatter: (params: any) => `{value|${Number(params.data.realValue).toLocaleString()}}\n{title|${String(params.name)}}`, rich: { title: { color: 'rgba(255,255,255,0.9)', fontSize: 10, fontWeight: 'bold' }, value: { color: '#fff', fontSize: 16, fontWeight: 800 } } },
+          label: { 
+            show: true, 
+            position: 'inside', 
+            formatter: (params: any) => {
+              const val = Number(params.data?.realValue ?? 0).toLocaleString('pt-BR');
+              const title = String(params.name ?? '');
+              return `{value|${val}}\n{title|${title}}`;
+            },
+            rich: { title: { color: 'rgba(255,255,255,0.9)', fontSize: 10, fontWeight: 'bold' }, value: { color: '#fff', fontSize: 16, fontWeight: 800 } } 
+          },
           data: data.map((d, i) => ({ value: d.value || 1, name: d.name, realValue: d.realValue, itemStyle: { color: colors[i] } }))
       }]
     };
@@ -738,7 +748,16 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
           name: 'Funnel',
           type: 'funnel',
           left: '10%', right: '10%', top: 40, bottom: 20, width: '80%', minSize: '0%', maxSize: '100%', sort: 'none', gap: 6,
-          label: { show: true, position: 'inside', formatter: (params: any) => `{value|${Number(params.data.realValue).toLocaleString()}}\n{title|${String(params.name)}}`, rich: { title: { color: 'rgba(255,255,255,0.9)', fontSize: 10, fontWeight: 'bold' }, value: { color: '#fff', fontSize: 16, fontWeight: 800 } } },
+          label: { 
+            show: true, 
+            position: 'inside', 
+            formatter: (params: any) => {
+              const val = Number(params.data?.realValue ?? 0).toLocaleString('pt-BR');
+              const title = String(params.name ?? '');
+              return `{value|${val}}\n{title|${title}}`;
+            },
+            rich: { title: { color: 'rgba(255,255,255,0.9)', fontSize: 10, fontWeight: 'bold' }, value: { color: '#fff', fontSize: 16, fontWeight: 800 } } 
+          },
           data: data.map((d, i) => ({ value: d.value || 1, name: d.name, realValue: d.realValue, itemStyle: { color: colors[i] } }))
       }]
     };

@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { clientService, getLocalDateString } from '../services/clientService';
 import { contractService } from '../services/contractService';
 import { Client, Contract } from '../types';
-import { Search, Plus, MoreVertical, TrendingUp, AlertTriangle, Loader2, RefreshCw, Copy, Check, Calendar, ChevronRight, Trash2, PauseCircle, PlayCircle, PenLine, ChevronDown, DollarSign, Users, PieChart, Link } from 'lucide-react';
+import { Search, Plus, MoreVertical, TrendingUp, AlertTriangle, Loader2, RefreshCw, Copy, Check, Calendar, ChevronRight, Trash2, PauseCircle, PlayCircle, PenLine, ChevronDown, DollarSign, Users, PieChart, Link, Wallet, CreditCard } from 'lucide-react';
 import { NewClientModal } from './NewClientModal';
 import { OnboardingGuide } from './OnboardingGuide';
 import { toast } from 'sonner';
@@ -461,6 +461,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectClient }) => {
                 const isCopied = copiedId === client.id;
                 const isLinkCopied = linkCopiedId === client.id;
 
+                // Lógica de Saldo
+                const isPrepaid = client.is_prepaid;
+                const balance = client.current_balance || 0;
+                // Alerta se for pré-pago e saldo < 30
+                const isLowBalance = isPrepaid && balance < 30;
+
                 return (
                   <div 
                     key={client.id} 
@@ -562,6 +568,24 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectClient }) => {
                                  <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">ROAS</span>
                               </div>
                               <p className={`text-sm font-bold ${roas >= 4 ? 'text-emerald-600' : 'text-slate-800'}`}>{roas.toFixed(2)}x</p>
+                           </div>
+
+                           {/* Saldo Disponível (Novo Bloco - Ocupa 2 colunas para destaque) */}
+                           <div className={`col-span-2 p-3 rounded-lg border transition-colors ${isLowBalance ? 'bg-red-50 border-red-200' : 'bg-slate-50 border-slate-100'}`}>
+                              <div className="flex items-center gap-1.5 mb-1">
+                                 <div className={`p-1 rounded ${isLowBalance ? 'bg-red-100 text-red-600' : 'bg-slate-200 text-slate-600'}`}>
+                                    {isPrepaid ? <Wallet size={12} /> : <CreditCard size={12} />}
+                                 </div>
+                                 <span className={`text-[10px] uppercase font-bold tracking-wider ${isLowBalance ? 'text-red-500' : 'text-slate-400'}`}>
+                                    {isPrepaid ? 'Saldo Disponível' : 'Fatura Atual'}
+                                 </span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <p className={`text-sm font-bold ${isLowBalance ? 'text-red-700' : 'text-slate-800'}`}>
+                                    R$ {balance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                </p>
+                                {isLowBalance && <AlertTriangle size={14} className="text-red-500 animate-pulse" />}
+                              </div>
                            </div>
                         </div>
                      </div>

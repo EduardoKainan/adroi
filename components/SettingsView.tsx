@@ -44,7 +44,8 @@ export const SettingsView: React.FC = () => {
     }
   }, [activeTab, organization?.id]);
 
-  const isAdmin = profile?.role === 'admin';
+  // CORREÇÃO: Super Admin também é um Admin para fins de configurações
+  const isAdmin = profile?.role === 'admin' || profile?.role === 'super_admin';
 
   const fetchTeamData = async () => {
     if (!organization?.id) return;
@@ -111,7 +112,7 @@ export const SettingsView: React.FC = () => {
       if (error) throw error;
 
       if (!data || data.length === 0) {
-        throw new Error("Nenhuma alteração salva. Verifique se você é Administrador.");
+        throw new Error("Nenhuma alteração salva. Verifique suas permissões no banco de dados.");
       }
 
       toast.success('Informações da empresa atualizadas!');
@@ -252,7 +253,7 @@ export const SettingsView: React.FC = () => {
         </div>
         <div className={`px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 ${isAdmin ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-600'}`}>
             <Shield size={14} />
-            {isAdmin ? 'Você é Admin' : 'Acesso Limitado'}
+            {isAdmin ? 'Acesso Administrativo' : 'Acesso Limitado'}
         </div>
       </div>
 
@@ -378,8 +379,12 @@ export const SettingsView: React.FC = () => {
                         </td>
                         <td className="px-6 py-4 text-slate-600">{member.email}</td>
                         <td className="px-6 py-4">
-                           <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${member.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
-                               {member.role === 'admin' ? 'Administrador' : 'Gerente'}
+                           <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${
+                                member.role === 'super_admin' ? 'bg-red-50 text-red-700 border border-red-100' :
+                                member.role === 'admin' ? 'bg-purple-100 text-purple-700' : 
+                                'bg-blue-100 text-blue-700'
+                           }`}>
+                               {member.role === 'super_admin' ? 'Super Admin' : member.role === 'admin' ? 'Administrador' : 'Gerente'}
                            </span>
                         </td>
                         <td className="px-6 py-4 text-right">
