@@ -1,9 +1,10 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { Project, Task, Goal, TaskCategory, Client } from '../types'; 
-import { Plus, MoreHorizontal, Calendar, Clock, ArrowRight, ArrowLeft, Trash2, PenLine, Target, AlertCircle, Briefcase, TrendingUp, CheckCircle2, GripVertical, X, ListTodo, ChevronRight, Eye, EyeOff, BarChart2, Layout, Filter } from 'lucide-react';
+import { Plus, MoreHorizontal, Calendar, Clock, ArrowRight, ArrowLeft, Trash2, PenLine, Target, AlertCircle, Briefcase, TrendingUp, CheckCircle2, GripVertical, X, ListTodo, ChevronRight, Eye, EyeOff, BarChart2, Layout, Filter, Play } from 'lucide-react';
 import { NewTaskModal } from './NewTaskModal';
 import { NewProjectModal } from './NewProjectModal';
+import { FocusModeOverlay } from './FocusModeOverlay';
 import ReactECharts from 'echarts-for-react';
 import * as echarts from 'echarts';
 
@@ -24,6 +25,7 @@ export const ProfessionalDashboard: React.FC<ProfessionalDashboardProps> = ({ pr
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
   const [dragOverColumn, setDragOverColumn] = useState<TaskCategory | null>(null);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
+  const [activeFocusTask, setActiveFocusTask] = useState<Task | null>(null);
   
   // State para controlar visibilidade de tarefas concluídas
   const [showCompleted, setShowCompleted] = useState(false);
@@ -388,6 +390,18 @@ export const ProfessionalDashboard: React.FC<ProfessionalDashboardProps> = ({ pr
   return (
     <div className="flex flex-col min-h-screen md:min-h-0 md:h-[calc(100vh-6rem)] animate-in fade-in duration-500 gap-6 relative">
       
+      {/* --- FOCUS MODE OVERLAY --- */}
+      {activeFocusTask && (
+        <FocusModeOverlay 
+            task={activeFocusTask} 
+            onClose={() => setActiveFocusTask(null)}
+            onComplete={() => {
+                onTaskToggle?.(activeFocusTask.id, true);
+                setActiveFocusTask(null);
+            }}
+        />
+      )}
+
       <NewTaskModal 
         isOpen={isTaskModalOpen}
         onClose={() => setIsTaskModalOpen(false)}
@@ -580,16 +594,29 @@ export const ProfessionalDashboard: React.FC<ProfessionalDashboardProps> = ({ pr
                                 </p>
                                 </div>
                                 
-                                <div className="flex flex-col gap-1 absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <GripVertical size={14} className="text-slate-300" />
+                                <div className="flex flex-col gap-1 absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity bg-white pl-1">
                                 
+                                {/* Start Focus Mode Button */}
+                                {!task.completed && (
+                                    <button 
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setActiveFocusTask(task);
+                                        }}
+                                        className="text-indigo-400 hover:text-indigo-600 hover:bg-indigo-50 p-1 rounded transition-colors"
+                                        title="Modo Foco"
+                                    >
+                                        <Play size={14} fill="currentColor" />
+                                    </button>
+                                )}
+
                                 {/* Edit Button */}
                                 <button 
                                     onClick={(e) => {
                                     e.stopPropagation();
                                     openEditTaskModal(task);
                                     }}
-                                    className="text-slate-300 hover:text-indigo-600 transition-colors"
+                                    className="text-slate-300 hover:text-indigo-600 hover:bg-slate-50 p-1 rounded transition-colors"
                                     title="Editar"
                                 >
                                     <PenLine size={14} />
@@ -601,7 +628,7 @@ export const ProfessionalDashboard: React.FC<ProfessionalDashboardProps> = ({ pr
                                     e.stopPropagation();
                                     onTaskDelete?.(task.id);
                                     }}
-                                    className="text-slate-300 hover:text-red-500 transition-colors"
+                                    className="text-slate-300 hover:text-red-500 hover:bg-red-50 p-1 rounded transition-colors"
                                     title="Excluir"
                                 >
                                     <Trash2 size={14} />
