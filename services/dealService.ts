@@ -1,8 +1,13 @@
 import { supabase } from '../lib/supabase';
 import { Deal } from '../types';
 
+export interface EnrichedDeal extends Deal {
+  client_name?: string;
+  client_company?: string;
+}
+
 export const dealService = {
-  // Fetch deals for a client
+  // Fetch deals for a specific client
   async getDeals(clientId: string) {
     const { data, error } = await supabase
       .from('deals')
@@ -15,6 +20,34 @@ export const dealService = {
       return [];
     }
     return data as Deal[];
+  },
+
+  // --- NOVO: Buscar todas as vendas da organização (Relatórios Globais) ---
+  async getAllDeals(startDate: string, endDate: string) {
+    const { data, error } = await supabase
+      .from('deals')
+      .select(`
+        *,
+        clients (
+          name,
+          company
+        )
+      `)
+      .gte('date', startDate)
+      .lte('date', endDate)
+      .order('date', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching all deals:', error);
+      return [];
+    }
+
+    // Mapeia para incluir nome do cliente no objeto principal
+    return data.map((d: any) => ({
+      ...d,
+      client_name: d.clients?.name,
+      client_company: d.clients?.company
+    })) as EnrichedDeal[];
   },
 
   // Add a new manual deal

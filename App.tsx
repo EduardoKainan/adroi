@@ -8,6 +8,7 @@ import { SettingsView } from './components/SettingsView';
 import { PublicReportForm } from './components/PublicReportForm';
 import { HelpView } from './components/HelpView';
 import { SuperAdminDashboard } from './components/SuperAdminDashboard'; // Import
+import { ReportsView } from './components/ReportsView'; // Import
 import { Login } from './components/Login';
 import { Register } from './components/Register';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -145,6 +146,7 @@ const AppContent: React.FC = () => {
                   currentView === 'DASHBOARD' ? 'Visão Geral' : 
                   currentView === 'CLIENT_DETAIL' ? 'Clientes' : 
                   currentView === 'TASKS' ? 'Tarefas' : 
+                  currentView === 'REPORTS' ? 'Relatórios' : 
                   currentView === 'SUPER_ADMIN' ? 'Super Admin' :
                   currentView === 'HELP' ? 'Ajuda' : 
                   'Configurações'}
@@ -164,6 +166,10 @@ const AppContent: React.FC = () => {
             onClientSwitch={handleClientSelect}
             onBack={() => handleViewChange('DASHBOARD')} 
           />
+        )}
+
+        {currentView === 'REPORTS' && (
+          <ReportsView />
         )}
 
         {currentView === 'TASKS' && (

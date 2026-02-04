@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Task } from '../types';
-import { X, Play, Pause, CheckCircle, Clock, Maximize2, Minimize2 } from 'lucide-react';
+import { X, Play, Pause, CheckCircle, Clock, Maximize2, Minimize2, Trophy, Sparkles } from 'lucide-react';
 
 interface FocusModeOverlayProps {
   task: Task;
@@ -13,10 +13,11 @@ export const FocusModeOverlay: React.FC<FocusModeOverlayProps> = ({ task, onClos
   const [seconds, setSeconds] = useState(0);
   const [isActive, setIsActive] = useState(true);
   const [isMinimized, setIsMinimized] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
 
   useEffect(() => {
     let interval: any = null;
-    if (isActive) {
+    if (isActive && !showSuccess) {
       interval = setInterval(() => {
         setSeconds(s => s + 1);
       }, 1000);
@@ -24,7 +25,7 @@ export const FocusModeOverlay: React.FC<FocusModeOverlayProps> = ({ task, onClos
       clearInterval(interval);
     }
     return () => clearInterval(interval);
-  }, [isActive, seconds]);
+  }, [isActive, seconds, showSuccess]);
 
   const formatTime = (totalSeconds: number) => {
     const hours = Math.floor(totalSeconds / 3600);
@@ -37,7 +38,17 @@ export const FocusModeOverlay: React.FC<FocusModeOverlayProps> = ({ task, onClos
     return `${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  if (isMinimized) {
+  const handleComplete = () => {
+    setIsActive(false);
+    setShowSuccess(true);
+    
+    // Aguarda a animação antes de fechar
+    setTimeout(() => {
+        onComplete();
+    }, 3500);
+  };
+
+  if (isMinimized && !showSuccess) {
       return (
           <div className="fixed bottom-6 right-6 z-[100] bg-slate-900 text-white p-4 rounded-xl shadow-2xl border border-slate-700 flex items-center gap-4 animate-in slide-in-from-bottom-10 fade-in duration-300">
               <div className="flex items-center gap-2">
@@ -56,76 +67,104 @@ export const FocusModeOverlay: React.FC<FocusModeOverlayProps> = ({ task, onClos
   }
 
   return (
-    <div className="fixed inset-0 z-[100] bg-slate-900/95 backdrop-blur-md flex flex-col items-center justify-center animate-in fade-in duration-300">
+    <div className="fixed inset-0 z-[100] bg-slate-900/95 backdrop-blur-md flex flex-col items-center justify-center animate-in fade-in duration-300 transition-all">
       
-      {/* Top Controls */}
-      <div className="absolute top-6 right-6 flex items-center gap-4">
-        <button 
-            onClick={() => setIsMinimized(true)}
-            className="text-slate-400 hover:text-white transition-colors flex items-center gap-2 text-sm font-medium px-4 py-2 rounded-lg hover:bg-white/10"
-        >
-            <Minimize2 size={18} /> Minimizar
-        </button>
-        <button 
-            onClick={onClose}
-            className="text-slate-400 hover:text-white transition-colors p-2 rounded-full hover:bg-white/10"
-        >
-            <X size={24} />
-        </button>
-      </div>
-
-      <div className="w-full max-w-3xl px-6 text-center space-y-8">
-         
-         {/* Status Badge */}
-         <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-            <Clock size={14} className={isActive ? "animate-spin-slow" : ""} />
-            <span className="text-xs font-bold tracking-widest uppercase">Modo Foco Ativo</span>
-         </div>
-
-         {/* Timer */}
-         <div className="font-mono text-8xl md:text-9xl font-bold text-white tracking-tighter tabular-nums drop-shadow-2xl">
-            {formatTime(seconds)}
-         </div>
-
-         {/* Task Title */}
-         <div className="space-y-2">
-            <h2 className="text-2xl md:text-4xl font-bold text-white leading-tight">
-                {task.title}
+      {/* TELA DE SUCESSO (Feedback de Conquista) */}
+      {showSuccess ? (
+        <div className="text-center animate-in zoom-in duration-500 flex flex-col items-center">
+            <div className="relative mb-8">
+                <div className="absolute inset-0 bg-yellow-500 blur-[60px] opacity-20 rounded-full animate-pulse"></div>
+                <Trophy size={120} className="text-yellow-400 relative z-10 drop-shadow-2xl animate-bounce" />
+                <Sparkles size={40} className="text-yellow-200 absolute -top-4 -right-4 animate-spin-slow" />
+                <Sparkles size={30} className="text-yellow-200 absolute bottom-0 -left-6 animate-pulse" />
+            </div>
+            
+            <h2 className="text-5xl md:text-6xl font-black text-white mb-4 tracking-tight bg-gradient-to-r from-white via-yellow-100 to-white bg-clip-text text-transparent">
+                Mandou bem!
             </h2>
-            {task.clientName && (
-                <p className="text-lg text-slate-400 font-medium">
-                    {task.clientName}
+            
+            <p className="text-xl text-slate-300 mb-8 font-medium">
+                Tarefa concluída com foco total.
+            </p>
+
+            <div className="bg-slate-800/50 border border-slate-700 p-6 rounded-2xl flex flex-col items-center gap-2 min-w-[280px]">
+                <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Tempo de Sessão</span>
+                <span className="font-mono text-4xl font-bold text-emerald-400">{formatTime(seconds)}</span>
+            </div>
+
+            <p className="mt-8 text-sm text-slate-500 animate-pulse">
+                Fechando e salvando...
+            </p>
+        </div>
+      ) : (
+        /* TELA DE FOCO (Timer) */
+        <>
+            <div className="absolute top-6 right-6 flex items-center gap-4">
+                <button 
+                    onClick={() => setIsMinimized(true)}
+                    className="text-slate-400 hover:text-white transition-colors flex items-center gap-2 text-sm font-medium px-4 py-2 rounded-lg hover:bg-white/10"
+                >
+                    <Minimize2 size={18} /> Minimizar
+                </button>
+                <button 
+                    onClick={onClose}
+                    className="text-slate-400 hover:text-white transition-colors p-2 rounded-full hover:bg-white/10"
+                >
+                    <X size={24} />
+                </button>
+            </div>
+
+            <div className="w-full max-w-3xl px-6 text-center space-y-8">
+                
+                {/* Status Badge */}
+                <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                    <Clock size={14} className={isActive ? "animate-spin-slow" : ""} />
+                    <span className="text-xs font-bold tracking-widest uppercase">Modo Foco Ativo</span>
+                </div>
+
+                {/* Timer */}
+                <div className="font-mono text-8xl md:text-9xl font-bold text-white tracking-tighter tabular-nums drop-shadow-2xl">
+                    {formatTime(seconds)}
+                </div>
+
+                {/* Task Title */}
+                <div className="space-y-2">
+                    <h2 className="text-2xl md:text-4xl font-bold text-white leading-tight">
+                        {task.title}
+                    </h2>
+                    {task.clientName && (
+                        <p className="text-lg text-slate-400 font-medium">
+                            {task.clientName}
+                        </p>
+                    )}
+                </div>
+
+                {/* Controls */}
+                <div className="flex items-center justify-center gap-6 pt-8">
+                    <button 
+                        onClick={() => setIsActive(!isActive)}
+                        className={`w-16 h-16 rounded-full flex items-center justify-center transition-all transform hover:scale-110 ${isActive ? 'bg-slate-800 text-yellow-400 border border-slate-600 hover:border-yellow-400' : 'bg-white text-indigo-900 shadow-lg shadow-indigo-500/50'}`}
+                        title={isActive ? "Pausar" : "Retomar"}
+                    >
+                        {isActive ? <Pause size={28} fill="currentColor" /> : <Play size={28} fill="currentColor" className="ml-1" />}
+                    </button>
+
+                    <button 
+                        onClick={handleComplete}
+                        className="group flex items-center gap-3 bg-emerald-600 text-white px-8 py-4 rounded-full font-bold text-lg hover:bg-emerald-500 transition-all shadow-lg shadow-emerald-900/30 transform hover:scale-105"
+                    >
+                        <CheckCircle size={24} className="group-hover:scale-110 transition-transform" />
+                        Concluir Tarefa
+                    </button>
+                </div>
+
+                {/* Note Hint */}
+                <p className="text-slate-500 text-sm mt-12 animate-pulse">
+                    Respire fundo. Foco total em uma coisa de cada vez.
                 </p>
-            )}
-         </div>
-
-         {/* Controls */}
-         <div className="flex items-center justify-center gap-6 pt-8">
-            <button 
-                onClick={() => setIsActive(!isActive)}
-                className={`w-16 h-16 rounded-full flex items-center justify-center transition-all transform hover:scale-110 ${isActive ? 'bg-slate-800 text-yellow-400 border border-slate-600 hover:border-yellow-400' : 'bg-white text-indigo-900 shadow-lg shadow-indigo-500/50'}`}
-                title={isActive ? "Pausar" : "Retomar"}
-            >
-                {isActive ? <Pause size={28} fill="currentColor" /> : <Play size={28} fill="currentColor" className="ml-1" />}
-            </button>
-
-            <button 
-                onClick={() => {
-                    const confirmComplete = window.confirm("Parabéns! Deseja concluir esta tarefa agora?");
-                    if (confirmComplete) onComplete();
-                }}
-                className="group flex items-center gap-3 bg-emerald-600 text-white px-8 py-4 rounded-full font-bold text-lg hover:bg-emerald-500 transition-all shadow-lg shadow-emerald-900/30 transform hover:scale-105"
-            >
-                <CheckCircle size={24} className="group-hover:scale-110 transition-transform" />
-                Concluir Tarefa
-            </button>
-         </div>
-
-         {/* Note Hint */}
-         <p className="text-slate-500 text-sm mt-12 animate-pulse">
-            Respire fundo. Foco total em uma coisa de cada vez.
-         </p>
-      </div>
+            </div>
+        </>
+      )}
     </div>
   );
 };
