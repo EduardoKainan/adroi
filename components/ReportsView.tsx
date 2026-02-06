@@ -117,6 +117,7 @@ export const ReportsView: React.FC = () => {
           clientSales[name] = (clientSales[name] || 0) + d.total_value;
       });
 
+      // FIX: Accessing array indices [0] for key and [1] for value instead of .value property
       const sortedData = Object.entries(clientSales)
         .sort((a, b) => a[1] - b[1]) // Ascendente para barra horizontal
         .slice(Math.max(0, Object.keys(clientSales).length - 5)); // Top 5

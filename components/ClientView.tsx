@@ -7,23 +7,24 @@ import { commercialService } from '../services/commercialService';
 import { aiAnalysisService } from '../services/aiAnalysisService';
 import { DollarSign, Target, TrendingUp, Calendar, Download, Loader2, Users, ShoppingBag, Plus, Copy, Check, BarChart, ChevronLeft, ChevronDown, Sparkles, PieChart, Link, ExternalLink, FileText, Briefcase, Search, Activity, Trash2, PenLine, Globe, Layers, StickyNote } from 'lucide-react';
 import { NewSaleModal } from './NewSaleModal';
+import { NewActivityModal } from './NewActivityModal';
 import { NewManualMetricModal } from './NewManualMetricModal';
 import { InsightsFeed } from './InsightsFeed';
-import { ClientNotes } from './ClientNotes'; // Importando o novo componente
+import { ClientNotes } from './ClientNotes'; 
 import ReactECharts from 'echarts-for-react';
 import * as echarts from 'echarts';
 import { toast } from 'sonner';
 
 interface ClientViewProps {
   client: Client;
-  clients?: Client[]; // Lista completa para o dropdown
-  onClientSwitch?: (client: Client) => void; // Função para trocar
+  clients?: Client[]; 
+  onClientSwitch?: (client: Client) => void; 
   onBack: () => void;
 }
 
 type DateRangeOption = 'YESTERDAY' | '7D' | '14D' | '30D' | 'CUSTOM';
 
-// Componentes de Skeleton para carregamento visual
+// Componentes de Skeleton para carregamento visual (Mantidos iguais)
 const SkeletonPulse: React.FC<{ className: string }> = ({ className }) => (
   <div className={`animate-pulse bg-slate-200 rounded ${className}`}></div>
 );
@@ -129,12 +130,17 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
   
   // UI State
   const [isSaleModalOpen, setIsSaleModalOpen] = useState(false);
-  const [isMetricModalOpen, setIsMetricModalOpen] = useState(false); // Novo Estado
-  const [dealToEdit, setDealToEdit] = useState<Deal | null>(null); // Estado para edição
+  const [isActivityModalOpen, setIsActivityModalOpen] = useState(false); // NOVO
+  const [isMetricModalOpen, setIsMetricModalOpen] = useState(false); 
+  
+  // Edit State
+  const [dealToEdit, setDealToEdit] = useState<Deal | null>(null);
+  const [activityToEdit, setActivityToEdit] = useState<CommercialActivity | null>(null); // NOVO
+
   const [copied, setCopied] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
-  const [crmListTab, setCrmListTab] = useState<'deals' | 'activities' | 'notes'>('deals'); // Nova opção 'notes'
-  const [activePlatformTab, setActivePlatformTab] = useState<string>('ALL'); // Estado para abas de gráficos
+  const [crmListTab, setCrmListTab] = useState<'deals' | 'activities' | 'notes'>('deals'); 
+  const [activePlatformTab, setActivePlatformTab] = useState<string>('ALL'); 
   
   // Header Dropdown State
   const [isClientDropdownOpen, setIsClientDropdownOpen] = useState(false);
@@ -144,7 +150,7 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
   // AI Insights State
   const [insights, setInsights] = useState<Insight[]>([]);
   const [loadingInsights, setLoadingInsights] = useState(false);
-  const [showInsights, setShowInsights] = useState(true); // Default true se tiver insights
+  const [showInsights, setShowInsights] = useState(true);
   
   const [currentClient, setCurrentClient] = useState<Client>(client);
 
@@ -185,19 +191,16 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
       if (lower.includes('tiktok')) return 'TikTok Ads';
       if (lower.includes('linkedin')) return 'LinkedIn Ads';
       if (lower.includes('[manual]')) {
-          // Tenta extrair do manual
           const match = name.match(/\[Manual\]\s?(.*)/i);
           if (match && match[1]) return match[1].trim();
       }
-      return 'Meta Ads'; // Default fallback
+      return 'Meta Ads';
   };
 
-  // Sincroniza o currentClient quando a prop muda (ex: troca pelo pai)
   useEffect(() => {
     setCurrentClient(client);
   }, [client]);
 
-  // Fecha dropdowns ao clicar fora
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
         const target = e.target as HTMLElement;
@@ -212,7 +215,6 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
     return () => document.removeEventListener('click', handleClickOutside);
   }, []);
 
-  // Calcula datas iniciais
   useEffect(() => {
     const today = new Date();
     let start = new Date();
@@ -243,17 +245,14 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
   }, [dateOption]);
 
   const calculateFilteredStats = () => {
-     // 1. Ads Metrics (Conversão segura para Number para evitar concatenação de strings)
      const adSpend = campaigns.reduce((acc, c) => acc + Number(c.spend || 0), 0);
      const adRevenue = campaigns.reduce((acc, c) => acc + Number(c.revenue || 0), 0);
      const totalLeads = campaigns.reduce((acc, c) => acc + Number(c.leads || 0), 0);
 
-     // 2. Offline Metrics (Filtered by date & Secure Number conversion)
      const offlineRevenue = deals
         .filter(d => d.date >= dateRange.start && d.date <= dateRange.end)
         .reduce((acc, d) => acc + Number(d.total_value || 0), 0);
 
-     // 3. Blended Totals
      const totalRevenue = adRevenue + offlineRevenue;
      const roas = adSpend > 0 ? totalRevenue / adSpend : 0;
      const roi = adSpend > 0 ? (totalRevenue - adSpend) / adSpend : 0;
@@ -275,7 +274,6 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
 
       const promises: Promise<any>[] = [
         clientService.getCampaigns(currentClient.id, startDateStr, endDateStr),
-        // Agora buscamos métricas detalhadas por plataforma
         clientService.getClientPlatformMetrics(currentClient.id, startDateStr, endDateStr),
         contractService.getClientContract(currentClient.id),
         dealService.getDeals(currentClient.id), 
@@ -287,11 +285,9 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
       
       setCampaigns(results[0]);
       
-      // Processar métricas detalhadas
       const pMetrics = results[1] as PlatformMetric[];
       setPlatformMetrics(pMetrics);
 
-      // Agregar para KPIs e IA (simulando o antigo getClientMetrics)
       const aggData: Record<string, DailyMetric> = {};
       pMetrics.forEach(m => {
           if (!aggData[m.date]) aggData[m.date] = { date: m.date, spend: 0, revenue: 0, leads: 0, roas: 0 };
@@ -320,10 +316,9 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
   };
 
   const handleSaleAdded = async () => {
-    // Recarrega apenas as deals para atualizar a lista e o cálculo
     const dealsData = await dealService.getDeals(currentClient.id);
     setDeals(dealsData);
-    setDealToEdit(null); // Limpa edição
+    setDealToEdit(null); 
   };
 
   const handleEditDeal = (deal: Deal) => {
@@ -350,7 +345,34 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
     setIsSaleModalOpen(true);
   };
 
-  // --- Função para chamar IA e Salvar ---
+  // --- MÉTODOS DE ATIVIDADES (CRM) ---
+  const handleActivitySaved = async () => {
+      const acts = await commercialService.getActivities(currentClient.id);
+      setActivities(acts);
+      setActivityToEdit(null);
+  };
+
+  const handleEditActivity = (activity: CommercialActivity) => {
+      setActivityToEdit(activity);
+      setIsActivityModalOpen(true);
+  };
+
+  const handleDeleteActivity = async (id: string) => {
+      if (!confirm("Tem certeza que deseja excluir esta atividade?")) return;
+      try {
+          await commercialService.deleteActivity(id);
+          setActivities(prev => prev.filter(a => a.id !== id));
+          toast.success("Atividade excluída.");
+      } catch (error) {
+          toast.error("Erro ao excluir atividade.");
+      }
+  };
+
+  const handleOpenNewActivity = () => {
+      setActivityToEdit(null);
+      setIsActivityModalOpen(true);
+  };
+
   const handleGenerateInsights = async () => {
      if (insights.length > 0 && !showInsights) {
        setShowInsights(true);
@@ -360,13 +382,12 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
      setLoadingInsights(true);
      setShowInsights(true);
      
-     // Atualiza o client com as métricas MISTAS (Blended) para enviar ao AI
      const clientWithCurrentStats: Client = {
         ...currentClient,
         total_spend: filteredStats.totalSpend,
-        total_revenue: filteredStats.totalRevenue, // Blended
+        total_revenue: filteredStats.totalRevenue, 
         total_leads: filteredStats.totalLeads,
-        roas: filteredStats.roas // Blended
+        roas: filteredStats.roas 
      };
 
      try {
@@ -432,8 +453,6 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
     if (currentClient.crm_enabled) {
         const periodActivities = activities.filter(a => a.date >= dateRange.start && a.date <= dateRange.end);
         
-        // --- ATUALIZAÇÃO: Cálculo usando 'quantity' ---
-        // Se quantity for undefined, assume 1. Se for 0, usa 0.
         const meetings = periodActivities.filter(a => a.type === 'meeting').reduce((acc, a) => acc + (a.quantity !== undefined ? a.quantity : 1), 0);
         const proposals = periodActivities.filter(a => a.type === 'proposal').reduce((acc, a) => acc + (a.quantity !== undefined ? a.quantity : 1), 0);
         const proposalValue = periodActivities.filter(a => a.type === 'proposal').reduce((acc, p) => acc + (p.value || 0), 0);
@@ -467,38 +486,29 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
     { label: 'ROI Real', value: `${((filteredStats.roi || 0) * 100).toFixed(1)}%`, sub: 'Final', trend: 'up', icon: BarChart, color: 'text-emerald-500' },
   ];
 
-  // --- DERIVED DATA PARA ABAS ---
-  // Extrair lista de plataformas únicas dos dados
   const availablePlatforms = useMemo(() => {
       const platforms = new Set<string>();
       platformMetrics.forEach(m => platforms.add(m.platform));
       return ['ALL', ...Array.from(platforms)];
   }, [platformMetrics]);
 
-  // Filtrar métricas com base na aba ativa
   const filteredMetricsForCharts = useMemo(() => {
       if (activePlatformTab === 'ALL') return platformMetrics;
       return platformMetrics.filter(m => m.platform === activePlatformTab);
   }, [activePlatformTab, platformMetrics]);
 
-  // Filtrar campanhas com base na aba ativa (para o Funil)
   const filteredCampaignsForCharts = useMemo(() => {
       if (activePlatformTab === 'ALL') return campaigns;
       return campaigns.filter(c => getPlatformFromCampaignName(c.name) === activePlatformTab);
   }, [activePlatformTab, campaigns]);
 
 
-  // --- ECHARTS CONFIGURATIONS ---
-
-  // 1. Finance Chart (Updated for Platforms & Tabs)
+  // --- ECHARTS CONFIGURATIONS --- (Removidos para brevidade, mantêm-se iguais)
   const getFinanceOption = useMemo(() => {
     if (!dateRange.start || !dateRange.end) return {};
-
-    // 1. Gerar eixo X
     const allDates: string[] = [];
     let curr = new Date(dateRange.start + 'T12:00:00');
     const end = new Date(dateRange.end + 'T12:00:00');
-    
     while (curr <= end) {
         const year = curr.getFullYear();
         const month = String(curr.getMonth() + 1).padStart(2, '0');
@@ -507,21 +517,15 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
         curr.setDate(curr.getDate() + 1);
     }
     const datesLabels = allDates.map(d => `${d.split('-')[2]}/${d.split('-')[1]}`);
-
     const series: any[] = [];
     const legends: string[] = [];
-
     if (activePlatformTab === 'ALL') {
-        // --- MODO GERAL: Barras Empilhadas por Plataforma + Total Revenue ---
         const platforms = Array.from(new Set(platformMetrics.map(p => p.platform)));
-        
-        // > INVESTIMENTO (Barras Empilhadas)
         platforms.forEach(platform => {
             const data = allDates.map(date => {
                 const entry = platformMetrics.find(m => m.date === date && m.platform === platform);
                 return entry ? entry.spend : 0;
             });
-            
             if (data.reduce((a, b) => a + b, 0) > 0) {
                 series.push({
                     name: `Invest. ${platform}`,
@@ -534,8 +538,6 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
                 legends.push(`Invest. ${platform}`);
             }
         });
-
-        // > RECEITA TOTAL (Ads + CRM)
         const totalRevenueData = allDates.map(date => {
             const adsRev = platformMetrics
                 .filter(m => m.date === date)
@@ -545,7 +547,6 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
                 .reduce((acc, d) => acc + Number(d.total_value), 0);
             return adsRev + crmRev;
         });
-
         series.push({
             name: 'Receita Total',
             type: 'line',
@@ -557,19 +558,15 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
             z: 10
         });
         legends.push('Receita Total');
-
     } else {
-        // --- MODO PLATAFORMA: Investimento vs Receita da Plataforma ---
         const spendData = allDates.map(date => {
             const entry = filteredMetricsForCharts.find(m => m.date === date);
             return entry ? entry.spend : 0;
         });
-
         const revenueData = allDates.map(date => {
             const entry = filteredMetricsForCharts.find(m => m.date === date);
             return entry ? entry.revenue : 0;
         });
-
         series.push({
             name: 'Investimento',
             type: 'bar',
@@ -577,7 +574,6 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
             data: spendData
         });
         legends.push('Investimento');
-
         series.push({
             name: 'Receita (Ads)',
             type: 'line',
@@ -587,7 +583,6 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
         });
         legends.push('Receita (Ads)');
     }
-
     return {
       toolbox: { feature: { saveAsImage: { show: true, title: 'Salvar' } }, right: '2%' },
       tooltip: {
@@ -613,26 +608,18 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
     };
   }, [platformMetrics, filteredMetricsForCharts, activePlatformTab, deals, dateRange]);
 
-  // 2. Acquisition Chart (Respects Filter)
   const getAcquisitionOption = useMemo(() => {
-    // Agrupa dados filtrados por data
     const groupedData: Record<string, { leads: number, spend: number }> = {};
-    
     filteredMetricsForCharts.forEach(m => {
         if (!groupedData[m.date]) groupedData[m.date] = { leads: 0, spend: 0 };
         groupedData[m.date].leads += m.leads;
         groupedData[m.date].spend += m.spend;
     });
-
-    // Ordena chaves
     const sortedDates = Object.keys(groupedData).sort();
     const datesLabels = sortedDates.map(d => `${d.split('-')[2]}/${d.split('-')[1]}`);
-    
     const leads = sortedDates.map(d => groupedData[d].leads);
     const cpl = sortedDates.map(d => groupedData[d].leads > 0 ? groupedData[d].spend / groupedData[d].leads : 0);
-    
     const barGradient = new echarts.graphic.LinearGradient(0, 0, 1, 0, [{ offset: 0, color: '#d97706' }, { offset: 1, color: '#b45309' }]);
-
     return {
       toolbox: { feature: { saveAsImage: { show: true, title: 'Salvar' } }, right: '2%' },
       tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
@@ -650,14 +637,11 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
     };
   }, [filteredMetricsForCharts]);
 
-  // 3. Marketing Funnel (Respects Filter)
   const getMarketingFunnelOption = useMemo(() => {
-    // Usa campanhas filtradas
     const impressions = filteredCampaignsForCharts.reduce((acc, c) => acc + (c.impressions || 0), 0);
     const clicks = filteredCampaignsForCharts.reduce((acc, c) => acc + (c.clicks || 0), 0);
     const leads = filteredCampaignsForCharts.reduce((acc, c) => acc + (c.leads || 0), 0);
     const adSales = filteredCampaignsForCharts.reduce((acc, c) => acc + (c.purchases || 0), 0);
-
     const create3DGradient = (colorStart: string, colorMid: string, colorEnd: string) => {
         return new echarts.graphic.LinearGradient(0, 0, 1, 0, [
             { offset: 0, color: colorStart },
@@ -665,21 +649,18 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
             { offset: 1, color: colorEnd }
         ]);
     };
-
     const data = [
         { name: 'IMPRESSÕES', value: impressions, realValue: impressions },
         { name: 'CLIQUES', value: clicks, realValue: clicks },
         { name: 'LEADS', value: leads, realValue: leads },
         { name: 'VENDAS (ADS)', value: adSales, realValue: adSales }
     ];
-    
     const colors = [
-        create3DGradient('#0891b2', '#67e8f9', '#0e7490'), // Cyan
-        create3DGradient('#2563eb', '#93c5fd', '#1e40af'), // Blue
-        create3DGradient('#7c3aed', '#c4b5fd', '#5b21b6'), // Violet
-        create3DGradient('#db2777', '#fbcfe8', '#9d174d')  // Pink
+        create3DGradient('#0891b2', '#67e8f9', '#0e7490'), 
+        create3DGradient('#2563eb', '#93c5fd', '#1e40af'), 
+        create3DGradient('#7c3aed', '#c4b5fd', '#5b21b6'), 
+        create3DGradient('#db2777', '#fbcfe8', '#9d174d')  
     ];
-
     return {
       title: { text: `Funil ${activePlatformTab === 'ALL' ? 'Geral' : activePlatformTab}`, left: 'center', textStyle: { fontSize: 14, color: '#64748b' }, top: 5 },
       toolbox: { feature: { saveAsImage: { show: true, title: 'Salvar' } }, right: '2%' },
@@ -706,15 +687,12 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
     };
   }, [filteredCampaignsForCharts, activePlatformTab]);
 
-  // 4. Commercial Funnel (CRM - Only shows on ALL)
   const getCommercialFunnelOption = useMemo(() => {
     const filteredActivities = activities.filter(a => a.date >= dateRange.start && a.date <= dateRange.end);
-    
     const meetings = filteredActivities.filter(a => a.type === 'meeting').reduce((acc, a) => acc + (a.quantity !== undefined ? a.quantity : 1), 0);
     const proposals = filteredActivities.filter(a => a.type === 'proposal').reduce((acc, a) => acc + (a.quantity !== undefined ? a.quantity : 1), 0);
     const leads = filteredStats.totalLeads;
     const dealsClosed = deals.filter(d => d.date >= dateRange.start && d.date <= dateRange.end).length;
-
     const create3DGradient = (colorStart: string, colorMid: string, colorEnd: string) => {
         return new echarts.graphic.LinearGradient(0, 0, 1, 0, [
             { offset: 0, color: colorStart },
@@ -722,21 +700,18 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
             { offset: 1, color: colorEnd }
         ]);
     };
-
     const data = [
         { name: 'LEADS TOTAIS', value: leads, realValue: leads },
         { name: 'REUNIÕES', value: meetings, realValue: meetings },
         { name: 'PROPOSTAS', value: proposals, realValue: proposals },
         { name: 'FECHAMENTOS', value: dealsClosed, realValue: dealsClosed }
     ];
-    
     const colors = [
-        create3DGradient('#d97706', '#fbbf24', '#b45309'), // Amber
-        create3DGradient('#ea580c', '#fdba74', '#c2410c'), // Orange
-        create3DGradient('#16a34a', '#86efac', '#14532d'), // Green
-        create3DGradient('#047857', '#6ee7b7', '#064e3b')  // Emerald Dark
+        create3DGradient('#d97706', '#fbbf24', '#b45309'), 
+        create3DGradient('#ea580c', '#fdba74', '#c2410c'), 
+        create3DGradient('#16a34a', '#86efac', '#14532d'), 
+        create3DGradient('#047857', '#6ee7b7', '#064e3b')  
     ];
-
     return {
       title: { text: 'Funil Comercial (CRM Local)', left: 'center', textStyle: { fontSize: 14, color: '#64748b' }, top: 5 },
       toolbox: { feature: { saveAsImage: { show: true, title: 'Salvar' } }, right: '2%' },
@@ -763,15 +738,11 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
     };
   }, [filteredStats.totalLeads, activities, deals, dateRange]);
 
-
-  // 5. Evolution Chart
   const getQualityEvolutionOption = useMemo(() => {
     if (!dateRange.start || !dateRange.end) return {};
-
     const allDates: string[] = [];
     let curr = new Date(dateRange.start + 'T12:00:00');
     const end = new Date(dateRange.end + 'T12:00:00');
-    
     while (curr <= end) {
         const year = curr.getFullYear();
         const month = String(curr.getMonth() + 1).padStart(2, '0');
@@ -779,34 +750,27 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
         allDates.push(`${year}-${month}-${day}`);
         curr.setDate(curr.getDate() + 1);
     }
-
     const datesLabels = allDates.map(d => `${d.split('-')[2]}/${d.split('-')[1]}`);
-
     const proposalData: number[] = [];
     const salesData: number[] = [];
     const qualityData: (number | null)[] = [];
-
     allDates.forEach(date => {
         const dayProposals = activities
             .filter(a => a.date === date && a.type === 'proposal')
             .reduce((acc, a) => acc + (a.quantity !== undefined ? a.quantity : 1), 0);
-        
         const daySales = deals
             .filter(d => d.date === date)
             .reduce((acc, d) => acc + (d.quantity !== undefined ? d.quantity : 1), 0);
-
         const dayQualityActs = activities.filter(a => a.date === date && a.lead_quality_score && a.lead_quality_score > 0);
         let avgQuality = null;
         if (dayQualityActs.length > 0) {
             const sum = dayQualityActs.reduce((acc, a) => acc + Number(a.lead_quality_score || 0), 0);
             avgQuality = Number((sum / dayQualityActs.length).toFixed(1));
         }
-
         proposalData.push(dayProposals);
         salesData.push(daySales);
         qualityData.push(avgQuality);
     });
-
     return {
       toolbox: { feature: { saveAsImage: { show: true, title: 'Salvar' } }, right: '2%' },
       tooltip: {
@@ -826,18 +790,14 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
         { name: 'Qualidade Média Lead (1-5)', type: 'line', yAxisIndex: 1, smooth: true, symbol: 'circle', symbolSize: 8, lineStyle: { width: 3, color: '#f59e0b' }, itemStyle: { color: '#f59e0b', borderWidth: 2, borderColor: '#fff' }, connectNulls: true, data: qualityData }
       ]
     };
-
   }, [activities, deals, dateRange]);
 
-  // 6. Distribution Charts (Pie) - Share of Spend & Revenue by Platform
   const getDistributionOption = (type: 'spend' | 'revenue') => {
       const platforms = Array.from(new Set(platformMetrics.map(p => p.platform)));
       let data = platforms.map(p => ({
           name: p,
           value: platformMetrics.filter(m => m.platform === p).reduce((acc, m) => acc + (type === 'spend' ? m.spend : m.revenue), 0)
       })).filter(d => d.value > 0);
-
-      // Add CRM Revenue if type is revenue
       if (type === 'revenue') {
           const crmValue = deals
             .filter(d => d.date >= dateRange.start && d.date <= dateRange.end)
@@ -846,7 +806,6 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
               data.push({ name: 'Offline/CRM', value: crmValue });
           }
       }
-
       return {
           title: { text: type === 'spend' ? 'Distribuição Investimento' : 'Distribuição Receita', left: 'center', top: '5%', textStyle: { fontSize: 14, color: '#64748b' } },
           tooltip: { trigger: 'item', formatter: '{b}: R$ {c} ({d}%)' },
@@ -866,7 +825,6 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
       };
   };
 
-
   const dateOptionLabels: Record<string, string> = {
     'YESTERDAY': 'Ontem',
     '7D': 'Últimos 7 dias',
@@ -875,7 +833,6 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
     'CUSTOM': 'Personalizado'
   };
 
-  // Renderiza a lista lateral dependendo da aba ativa (Vendas ou Atividades)
   const renderSidePanelContent = () => {
     if (crmListTab === 'deals') {
         return (
@@ -891,7 +848,6 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
                         </button>
                     </div>
                 </div>
-                {/* Visualização em GRID responsivo para ocupar a largura total */}
                 <div className="flex-1 overflow-y-auto pr-1 max-h-[400px] custom-scrollbar">
                     {deals.length > 0 ? (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -906,7 +862,6 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
                                         <p className="text-[9px] text-slate-400">{deal.quantity} un.</p>
                                     </div>
                                     
-                                    {/* Action Buttons (Edit/Delete) - Absolute Positioned on Hover */}
                                     <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity bg-white pl-1">
                                         <button 
                                             onClick={() => handleEditDeal(deal)}
@@ -935,7 +890,6 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
             </>
         );
     } else if (crmListTab === 'activities') {
-        // Lista de Atividades (CRM)
         const filteredActs = activities.filter(a => a.date >= dateRange.start && a.date <= dateRange.end);
         
         return (
@@ -945,8 +899,12 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
                         <Users size={18} className="text-blue-600" />
                         Atividades CRM
                     </h3>
+                    <div className="flex gap-2">
+                        <button onClick={handleOpenNewActivity} className="flex items-center gap-1 text-xs font-bold bg-blue-50 text-blue-700 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition-colors">
+                            <Plus size={14} /> Nova
+                        </button>
+                    </div>
                 </div>
-                {/* Visualização em GRID responsivo */}
                 <div className="flex-1 overflow-y-auto pr-1 max-h-[400px] custom-scrollbar">
                     {filteredActs.length > 0 ? (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -985,20 +943,37 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
                                     {act.notes && (
                                         <p className="text-[10px] text-slate-500 mt-1 italic line-clamp-2">"{act.notes}"</p>
                                     )}
+
+                                    {/* Action Buttons */}
+                                    <div className="absolute right-2 top-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity bg-white pl-1 rounded border border-slate-100">
+                                        <button 
+                                            onClick={() => handleEditActivity(act)}
+                                            className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors"
+                                            title="Editar"
+                                        >
+                                            <PenLine size={12} />
+                                        </button>
+                                        <button 
+                                            onClick={() => handleDeleteActivity(act.id)}
+                                            className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                                            title="Excluir"
+                                        >
+                                            <Trash2 size={12} />
+                                        </button>
+                                    </div>
                                 </div>
                             ))}
                         </div>
                     ) : (
                         <div className="h-full flex flex-col items-center justify-center text-slate-400 text-center italic text-xs border-2 border-dashed border-slate-100 rounded-lg p-6">
                             <p>Nenhuma atividade encontrada neste período.</p>
-                            <p className="mt-1">Use o link público para registrar.</p>
+                            <p className="mt-1">Use o link público ou o botão Nova para registrar.</p>
                         </div>
                     )}
                 </div>
             </>
         );
     } else {
-        // --- ABA DE ANOTAÇÕES (NOVO) ---
         return <ClientNotes clientId={currentClient.id} />;
     }
   };
@@ -1016,6 +991,14 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
         onSuccess={handleSaleAdded} 
         clientId={currentClient.id} 
         dealToEdit={dealToEdit} 
+      />
+
+      <NewActivityModal
+        isOpen={isActivityModalOpen}
+        onClose={() => setIsActivityModalOpen(false)}
+        onSuccess={handleActivitySaved}
+        clientId={currentClient.id}
+        activityToEdit={activityToEdit}
       />
 
       <NewManualMetricModal
@@ -1171,7 +1154,6 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
                   {copied ? <Check size={14} /> : <Copy size={14} />} {copied ? 'Copiado' : 'Relatório'}
                 </button>
                 
-                {/* Botão de Métricas Externas */}
                 <button 
                   onClick={() => setIsMetricModalOpen(true)}
                   className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-blue-50 text-blue-700 border border-blue-200 px-4 py-2 rounded-lg text-xs font-bold hover:bg-blue-100 transition-colors shadow-sm"
@@ -1236,7 +1218,6 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
       ) : (
         <div className="space-y-6 animate-fade-in">
             
-            {/* Linha 1: Financeiro e Aquisição */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="bg-white p-4 md:p-6 rounded-xl border border-slate-200 shadow-sm h-full">
                     <h3 className="text-base md:text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
@@ -1265,7 +1246,6 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
                 </div>
             </div>
 
-            {/* Linha 2: Distribuição por Plataforma (NOVO) - Só mostra no modo Geral */}
             {activePlatformTab === 'ALL' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="bg-white p-4 md:p-6 rounded-xl border border-slate-200 shadow-sm">
@@ -1287,7 +1267,6 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
                 </div>
             )}
 
-            {/* Linha 3: Funis */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="bg-white p-4 md:p-6 rounded-xl border border-slate-200 shadow-sm h-full">
                     <h3 className="text-base md:text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
@@ -1302,7 +1281,6 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
                     />
                 </div>
 
-                {/* CRM Funnel só aparece se estiver na aba GERAL, pois é agnóstico de plataforma de anúncio na maioria das vezes */}
                 {currentClient.crm_enabled && activePlatformTab === 'ALL' && (
                     <div className="bg-white p-4 md:p-6 rounded-xl border border-slate-200 shadow-sm h-full">
                         <h3 className="text-base md:text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
@@ -1319,7 +1297,6 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
                 )}
             </div>
 
-            {/* Linha 4: Evolução Comercial & Qualidade (Só no Geral) */}
             {activePlatformTab === 'ALL' && (
                 <div className="bg-white p-4 md:p-6 rounded-xl border border-slate-200 shadow-sm">
                     <h3 className="text-base md:text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
@@ -1344,7 +1321,6 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
       ) : (
         <div className="bg-white p-4 md:p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col w-full min-h-[400px]">
              
-             {/* Header com Abas */}
              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-2">
                 <div className="flex gap-2 w-full sm:w-auto">
                     <div className="bg-slate-100 p-1 rounded-lg flex gap-1 w-full sm:w-auto">
@@ -1401,7 +1377,6 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
               <span className="text-[10px] bg-white px-2 py-1 rounded border font-bold text-slate-500 uppercase tracking-tighter">Performance Ativa</span>
            </div>
 
-           {/* Desktop Campaign Table */}
            <div className="hidden lg:block overflow-x-auto">
               <table className="w-full text-left text-sm">
                  <thead className="bg-slate-50 text-slate-500 font-medium border-b border-slate-200 uppercase text-[10px] tracking-widest">
@@ -1417,7 +1392,6 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
                     </tr>
                  </thead>
                  <tbody className="divide-y divide-slate-100">
-                    {/* Filtra campanhas na tabela também, se não for ALL */}
                     {filteredCampaignsForCharts.map((camp) => {
                        const cpl = camp.leads > 0 ? camp.spend / camp.leads : 0;
                        return (
@@ -1438,7 +1412,6 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
               </table>
            </div>
 
-           {/* Mobile/Tablet Campaign Cards */}
            <div className="lg:hidden divide-y divide-slate-100">
               {filteredCampaignsForCharts.map((camp) => {
                 const cpl = camp.leads > 0 ? camp.spend / camp.leads : 0;

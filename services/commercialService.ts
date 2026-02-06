@@ -27,6 +27,42 @@ export const commercialService = {
     return data;
   },
 
+  // Atualizar atividade existente
+  async updateActivity(id: string, updates: Partial<CommercialActivity>) {
+    const payload: any = {
+        type: updates.type,
+        date: updates.date,
+        prospect_name: updates.prospect_name,
+        value: updates.value,
+        notes: updates.notes,
+        quantity: updates.quantity,
+        lead_quality_score: updates.lead_quality_score
+    };
+
+    // Remove undefined keys
+    Object.keys(payload).forEach(key => payload[key] === undefined && delete payload[key]);
+
+    const { data, error } = await supabase
+      .from('commercial_activities')
+      .update(payload)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data as CommercialActivity;
+  },
+
+  // Deletar atividade
+  async deleteActivity(id: string) {
+    const { error } = await supabase
+      .from('commercial_activities')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+  },
+
   // Buscar atividades recentes de um cliente
   async getActivities(clientId: string, type?: 'meeting' | 'proposal') {
     let query = supabase

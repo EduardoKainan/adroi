@@ -451,9 +451,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectClient }) => {
           </div>
         </div>
 
-        {/* CLIENTS GRID VIEW (3 COLUMNS) */}
+        {/* CLIENTS GRID VIEW (4 COLUMNS on XL) */}
         {!loading && filteredClients.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-fade-in">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 animate-fade-in">
              {filteredClients.map((client) => {
                 const roas = client.total_spend > 0 ? client.total_revenue / client.total_spend : 0;
                 const cpl = client.total_leads > 0 ? client.total_spend / client.total_leads : 0;

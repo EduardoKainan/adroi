@@ -195,4 +195,4 @@ export interface Goal {
   status: 'on_track' | 'at_risk' | 'completed';
 }
 
-export type ViewState = 'DASHBOARD' | 'CLIENT_DETAIL' | 'SETTINGS' | 'TASKS' | 'HELP' | 'SUPER_ADMIN';
+export type ViewState = 'DASHBOARD' | 'CLIENT_DETAIL' | 'SETTINGS' | 'TASKS' | 'HELP' | 'SUPER_ADMIN' | 'REPORTS';
