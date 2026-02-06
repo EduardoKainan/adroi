@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { Client, Contract, Campaign, DailyMetric, Deal, Insight, CommercialActivity } from '../types';
 import { clientService, getLocalDateString, PlatformMetric } from '../services/clientService';
@@ -5,7 +6,7 @@ import { contractService } from '../services/contractService';
 import { dealService } from '../services/dealService';
 import { commercialService } from '../services/commercialService';
 import { aiAnalysisService } from '../services/aiAnalysisService';
-import { DollarSign, Target, TrendingUp, Calendar, Download, Loader2, Users, ShoppingBag, Plus, Copy, Check, BarChart, ChevronLeft, ChevronDown, Sparkles, PieChart, Link, ExternalLink, FileText, Briefcase, Search, Activity, Trash2, PenLine, Globe, Layers, StickyNote } from 'lucide-react';
+import { DollarSign, Target, TrendingUp, Calendar, Download, Loader2, Users, ShoppingBag, Plus, Copy, Check, BarChart, ChevronLeft, ChevronDown, Sparkles, PieChart, Link, ExternalLink, FileText, Briefcase, Search, Activity, Trash2, PenLine, Globe, Layers, StickyNote, Percent } from 'lucide-react';
 import { NewSaleModal } from './NewSaleModal';
 import { NewActivityModal } from './NewActivityModal';
 import { NewManualMetricModal } from './NewManualMetricModal';
@@ -47,9 +48,9 @@ const HeaderSkeleton = () => (
 );
 
 const KPISkeleton = () => (
-  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-6 mb-6">
-    {[1, 2, 3, 4, 5].map((i) => (
-      <div key={i} className={`bg-white p-4 md:p-6 rounded-xl border border-slate-200 shadow-sm ${i === 5 ? 'col-span-2 md:col-span-1' : ''}`}>
+  <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-6 mb-6">
+    {[1, 2, 3, 4, 5, 6].map((i) => (
+      <div key={i} className="bg-white p-4 md:p-6 rounded-xl border border-slate-200 shadow-sm">
         <div className="flex justify-between items-start mb-4">
           <SkeletonPulse className="h-8 w-8 rounded-lg" />
           <SkeletonPulse className="h-4 w-12" />
@@ -245,19 +246,36 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
   }, [dateOption]);
 
   const calculateFilteredStats = () => {
+     // Campanhas (já filtradas por data no fetch, mas o state campaigns pode acumular, melhor garantir)
+     // Nota: o fetch getCampaigns já traz com os totais somados para o range.
      const adSpend = campaigns.reduce((acc, c) => acc + Number(c.spend || 0), 0);
      const adRevenue = campaigns.reduce((acc, c) => acc + Number(c.revenue || 0), 0);
      const totalLeads = campaigns.reduce((acc, c) => acc + Number(c.leads || 0), 0);
+     const adSalesCount = campaigns.reduce((acc, c) => acc + Number(c.purchases || 0), 0);
 
-     const offlineRevenue = deals
-        .filter(d => d.date >= dateRange.start && d.date <= dateRange.end)
-        .reduce((acc, d) => acc + Number(d.total_value || 0), 0);
+     // Deals (Vendas Manuais) - Precisamos filtrar pois deals traz tudo
+     const filteredDeals = deals.filter(d => d.date >= dateRange.start && d.date <= dateRange.end);
+     const offlineRevenue = filteredDeals.reduce((acc, d) => acc + Number(d.total_value || 0), 0);
+     const offlineSalesCount = filteredDeals.reduce((acc, d) => acc + (d.quantity || 1), 0);
 
      const totalRevenue = adRevenue + offlineRevenue;
+     const totalSalesCount = adSalesCount + offlineSalesCount;
+     
      const roas = adSpend > 0 ? totalRevenue / adSpend : 0;
      const roi = adSpend > 0 ? (totalRevenue - adSpend) / adSpend : 0;
+     const conversionRate = totalLeads > 0 ? (totalSalesCount / totalLeads) * 100 : 0;
 
-     return { totalSpend: adSpend, totalRevenue, adRevenue, offlineRevenue, totalLeads, roas, roi };
+     return { 
+        totalSpend: adSpend, 
+        totalRevenue, 
+        adRevenue, 
+        offlineRevenue, 
+        totalLeads, 
+        totalSalesCount,
+        roas, 
+        roi,
+        conversionRate
+     };
   };
 
   const filteredStats = calculateFilteredStats();
@@ -448,7 +466,8 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
     text += `💰 Resumo Financeiro\n`;
     text += `Investimento: R$ ${filteredStats.totalSpend?.toLocaleString('pt-BR')}\n`;
     text += `Receita (Ads + Manual): R$ ${filteredStats.totalRevenue?.toLocaleString('pt-BR')}\n`;
-    text += `ROAS Misto: ${filteredStats.roas.toFixed(2)}x`;
+    text += `ROAS Misto: ${filteredStats.roas.toFixed(2)}x\n`;
+    text += `Taxa de Conversão: ${filteredStats.conversionRate.toFixed(2)}% (${filteredStats.totalSalesCount} vendas)`;
 
     if (currentClient.crm_enabled) {
         const periodActivities = activities.filter(a => a.date >= dateRange.start && a.date <= dateRange.end);
@@ -481,9 +500,10 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
   const kpis = [
     { label: 'Leads', value: filteredStats.totalLeads.toLocaleString('pt-BR'), sub: `${daysDiff}d`, trend: 'up', icon: Users, color: 'text-orange-500' },
     { label: 'Investido', value: `R$ ${filteredStats.totalSpend.toLocaleString('pt-BR')}`, sub: `${daysDiff}d`, trend: 'up', icon: DollarSign, color: 'text-blue-500' },
-    { label: 'Receita Total', value: `R$ ${filteredStats.totalRevenue.toLocaleString('pt-BR')}`, sub: `Ads: ${(filteredStats.adRevenue/1000).toFixed(1)}k | Manual: ${(filteredStats.offlineRevenue/1000).toFixed(1)}k`, trend: 'up', icon: Target, color: 'text-green-500' },
+    { label: 'Receita Total', value: `R$ ${filteredStats.totalRevenue.toLocaleString('pt-BR')}`, sub: `Ads: ${(filteredStats.adRevenue/1000).toFixed(1)}k | Man: ${(filteredStats.offlineRevenue/1000).toFixed(1)}k`, trend: 'up', icon: Target, color: 'text-green-500' },
     { label: 'ROAS Misto', value: `${(filteredStats.roas || 0).toFixed(2)}x`, sub: 'Meta 4x', trend: (filteredStats.roas || 0) > 4 ? 'up' : 'down', icon: PieChart, color: 'text-purple-500' },
     { label: 'ROI Real', value: `${((filteredStats.roi || 0) * 100).toFixed(1)}%`, sub: 'Final', trend: 'up', icon: BarChart, color: 'text-emerald-500' },
+    { label: 'Taxa de Conversão', value: `${(filteredStats.conversionRate || 0).toFixed(2)}%`, sub: `${filteredStats.totalSalesCount} Vendas / ${filteredStats.totalLeads} Leads`, trend: 'up', icon: Percent, color: 'text-pink-500' },
   ];
 
   const availablePlatforms = useMemo(() => {
@@ -1170,9 +1190,9 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
       {loading ? (
         <KPISkeleton />
       ) : (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-6">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-6">
           {kpis.map((kpi, idx) => (
-            <div key={idx} className={`bg-white p-4 md:p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow ${idx === 4 ? 'col-span-2 md:col-span-1' : ''}`}>
+            <div key={idx} className="bg-white p-4 md:p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
               <div className="flex justify-between items-start">
                 <div className={`p-2 rounded-lg bg-slate-50 ${kpi.color}`}>
                   <kpi.icon size={18} />

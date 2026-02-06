@@ -23,8 +23,9 @@ export const dealService = {
   },
 
   // --- NOVO: Buscar todas as vendas da organização (Relatórios Globais) ---
-  async getAllDeals(startDate: string, endDate: string) {
-    const { data, error } = await supabase
+  // Atualizado para aceitar filtro opcional por cliente
+  async getAllDeals(startDate: string, endDate: string, clientId?: string) {
+    let query = supabase
       .from('deals')
       .select(`
         *,
@@ -36,6 +37,13 @@ export const dealService = {
       .gte('date', startDate)
       .lte('date', endDate)
       .order('date', { ascending: false });
+
+    // Se um ID de cliente específico for passado (e não for 'all'), aplica o filtro
+    if (clientId && clientId !== 'all') {
+      query = query.eq('client_id', clientId);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       console.error('Error fetching all deals:', error);

@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { dealService, EnrichedDeal } from '../services/dealService';
-import { getLocalDateString } from '../services/clientService';
-import { Calendar, ChevronDown, DollarSign, TrendingUp, ShoppingBag, Loader2, Download, Filter } from 'lucide-react';
+import { clientService, getLocalDateString } from '../services/clientService';
+import { Client } from '../types';
+import { Calendar, ChevronDown, DollarSign, TrendingUp, ShoppingBag, Loader2, Download, Filter, Users } from 'lucide-react';
 import ReactECharts from 'echarts-for-react';
 import * as echarts from 'echarts';
 
@@ -9,10 +10,12 @@ type DateRangeOption = 'YESTERDAY' | '7D' | '14D' | '30D' | 'THIS_MONTH' | 'CUST
 
 export const ReportsView: React.FC = () => {
   const [deals, setDeals] = useState<EnrichedDeal[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [dateOption, setDateOption] = useState<DateRangeOption>('THIS_MONTH');
   const [dateRange, setDateRange] = useState({ start: '', end: '' });
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [selectedClientId, setSelectedClientId] = useState<string>('all');
 
   // Inicialização de datas
   useEffect(() => {
@@ -47,12 +50,28 @@ export const ReportsView: React.FC = () => {
     });
   }, [dateOption]);
 
-  // Fetch Data
+  // Carregar Clientes para o Filtro
+  useEffect(() => {
+    const fetchClients = async () => {
+        try {
+            // Usamos datas fictícias ou as atuais apenas para obter a lista, 
+            // já que getClients requer datas para métricas, mas aqui queremos apenas nomes/ids.
+            const today = getLocalDateString(new Date());
+            const data = await clientService.getClients(today, today);
+            setClients(data);
+        } catch (error) {
+            console.error("Failed to load clients for filter", error);
+        }
+    };
+    fetchClients();
+  }, []);
+
+  // Fetch Data (Deals)
   const fetchData = async () => {
     if (!dateRange.start || !dateRange.end) return;
     setLoading(true);
     try {
-      const data = await dealService.getAllDeals(dateRange.start, dateRange.end);
+      const data = await dealService.getAllDeals(dateRange.start, dateRange.end, selectedClientId);
       setDeals(data);
     } catch (error) {
       console.error("Failed to load reports", error);
@@ -63,7 +82,7 @@ export const ReportsView: React.FC = () => {
 
   useEffect(() => {
     fetchData();
-  }, [dateRange]);
+  }, [dateRange, selectedClientId]); // Recarrega quando data ou cliente muda
 
   // Cálculos de KPI
   const totalRevenue = deals.reduce((acc, d) => acc + d.total_value, 0);
@@ -173,11 +192,31 @@ export const ReportsView: React.FC = () => {
                 <p className="text-sm text-slate-500">Análise consolidada de fechamentos e receita.</p>
             </div>
 
-            <div className="flex items-center gap-3 w-full md:w-auto">
-                <div className="relative w-full md:w-auto" id="date-picker-reports">
+            <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
+                {/* FILTRO DE CLIENTE */}
+                <div className="relative w-full sm:w-[200px]">
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">
+                        <Users size={16} />
+                    </div>
+                    <select
+                        className="w-full pl-9 pr-8 py-2 border border-slate-300 rounded-lg text-sm font-medium bg-slate-50 hover:bg-slate-100 transition-colors focus:ring-2 focus:ring-indigo-500 outline-none appearance-none cursor-pointer"
+                        value={selectedClientId}
+                        onChange={(e) => setSelectedClientId(e.target.value)}
+                    >
+                        <option value="all">Todos os Clientes</option>
+                        {clients.map(c => (
+                            <option key={c.id} value={c.id}>{c.company}</option>
+                        ))}
+                    </select>
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500">
+                        <ChevronDown size={14} />
+                    </div>
+                </div>
+
+                <div className="relative w-full sm:w-auto" id="date-picker-reports">
                     <button 
                         onClick={() => setShowDatePicker(!showDatePicker)}
-                        className="w-full md:w-[240px] bg-slate-50 border border-slate-300 text-slate-700 py-2 px-3 rounded-lg text-sm font-medium flex items-center justify-between hover:bg-slate-100 transition-colors"
+                        className="w-full sm:w-[220px] bg-slate-50 border border-slate-300 text-slate-700 py-2 px-3 rounded-lg text-sm font-medium flex items-center justify-between hover:bg-slate-100 transition-colors"
                     >
                         <div className="flex items-center gap-2">
                             <Calendar size={16} className="text-slate-500" />
