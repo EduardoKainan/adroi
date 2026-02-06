@@ -1,5 +1,5 @@
 
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { UserProfile, Organization } from '../types';
 import { Session, User } from '@supabase/supabase-js';
@@ -21,41 +21,77 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [organization, setOrganization] = useState<Organization | null>(null);
   const [loading, setLoading] = useState(true);
+  
+  // Ref para evitar fetch desnecessário se o usuário não mudou
+  const lastUserId = useRef<string | null>(null);
 
   useEffect(() => {
-    // 1. Check active session
-    supabase.auth.getSession().then(({ data: { session }, error }) => {
-      if (error) {
-        // Se houver erro na sessão (ex: Invalid Refresh Token), forçamos logout local
-        console.warn("Sessão inválida ou expirada:", error.message);
-        signOut();
-        setLoading(false);
-        return;
-      }
-      
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchProfile(session.user.id);
-      } else {
-        setLoading(false);
-      }
-    });
+    let mounted = true;
 
-    // 2. Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    // 1. Check active session immediately
+    const initSession = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          console.warn("Erro na sessão inicial:", error.message);
+          if (mounted) setLoading(false);
+          return;
+        }
+
+        if (mounted) {
+          setSession(session);
+          setUser(session?.user ?? null);
+          
+          if (session?.user) {
+            lastUserId.current = session.user.id;
+            await fetchProfile(session.user.id);
+          } else {
+            setLoading(false);
+          }
+        }
+      } catch (err) {
+        if (mounted) setLoading(false);
+      }
+    };
+
+    initSession();
+
+    // 2. Listen for auth changes (Token Refresh, Sign In/Out)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!mounted) return;
+
+      // Ignora TOKEN_REFRESHED se já temos o usuário carregado para evitar re-renders pesados
+      // A sessão será atualizada silenciosamente pelo client do Supabase para requests
+      if (event === 'TOKEN_REFRESHED' && session?.user?.id === lastUserId.current) {
+         setSession(session); // Apenas atualiza token, não reseta loading ou perfil
+         return;
+      }
+
       setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchProfile(session.user.id);
+      const newUser = session?.user ?? null;
+      setUser(newUser);
+
+      if (newUser) {
+        // Só busca perfil se o usuário mudou (Login ou Troca de Conta)
+        if (newUser.id !== lastUserId.current) {
+           lastUserId.current = newUser.id;
+           // setLoading(true); // Opcional: Mostrar loading ao trocar de usuário
+           await fetchProfile(newUser.id);
+        }
       } else {
+        // Logout
+        lastUserId.current = null;
         setProfile(null);
         setOrganization(null);
         setLoading(false);
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const fetchProfile = async (userId: string) => {
@@ -82,8 +118,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     } catch (error) {
       console.error('Error fetching user profile:', error);
-      // Opcional: Se falhar em buscar o perfil (ex: erro de rede), apenas paramos o loading
-      // e o usuário verá um estado talvez incompleto, mas não travado.
     } finally {
       setLoading(false);
     }
@@ -95,6 +129,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(null);
     setProfile(null);
     setOrganization(null);
+    lastUserId.current = null;
   };
 
   return (
