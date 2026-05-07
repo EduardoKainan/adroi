@@ -1,15 +1,19 @@
 
 import React, { useEffect, useState, useMemo, useRef } from 'react';
-import { Client, Contract, Campaign, DailyMetric, Deal, Insight, CommercialActivity } from '../types';
+import { supabase } from '../lib/supabase';
+import { Client, Contract, Campaign, DailyMetric, Deal, Insight, CommercialActivity, CRMContact, CRMInteraction } from '../types';
 import { clientService, getLocalDateString, PlatformMetric } from '../services/clientService';
 import { contractService } from '../services/contractService';
 import { dealService } from '../services/dealService';
 import { commercialService } from '../services/commercialService';
+import { crmService } from '../services/crmService';
 import { aiAnalysisService } from '../services/aiAnalysisService';
-import { DollarSign, Target, TrendingUp, Calendar, Download, Loader2, Users, ShoppingBag, Plus, Copy, Check, BarChart, ChevronLeft, ChevronDown, Sparkles, PieChart, Link, ExternalLink, FileText, Briefcase, Search, Activity, Trash2, PenLine, Globe, Layers, StickyNote, Percent } from 'lucide-react';
+import { DollarSign, Target, TrendingUp, Calendar, Download, Loader2, Users, ShoppingBag, Plus, Copy, Check, BarChart, ChevronLeft, ChevronDown, Sparkles, PieChart, Link, ExternalLink, FileText, Briefcase, Search, Activity, Trash2, PenLine, Globe, Layers, StickyNote, Percent, Phone, Mail, MessageSquare, User, Wallet, CreditCard, AlertTriangle } from 'lucide-react';
 import { NewSaleModal } from './NewSaleModal';
 import { NewActivityModal } from './NewActivityModal';
 import { NewManualMetricModal } from './NewManualMetricModal';
+import { NewContactModal } from './NewContactModal';
+import { ContactDetails } from './ContactDetails';
 import { InsightsFeed } from './InsightsFeed';
 import { ClientNotes } from './ClientNotes'; 
 import ReactECharts from 'echarts-for-react';
@@ -128,19 +132,23 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
   // Dados de CRM
   const [deals, setDeals] = useState<Deal[]>([]);
   const [activities, setActivities] = useState<CommercialActivity[]>([]);
+  const [contacts, setContacts] = useState<CRMContact[]>([]);
   
   // UI State
   const [isSaleModalOpen, setIsSaleModalOpen] = useState(false);
   const [isActivityModalOpen, setIsActivityModalOpen] = useState(false); // NOVO
   const [isMetricModalOpen, setIsMetricModalOpen] = useState(false); 
+  const [isContactModalOpen, setIsContactModalOpen] = useState(false);
   
   // Edit State
   const [dealToEdit, setDealToEdit] = useState<Deal | null>(null);
   const [activityToEdit, setActivityToEdit] = useState<CommercialActivity | null>(null); // NOVO
+  const [contactToEdit, setContactToEdit] = useState<CRMContact | null>(null);
+  const [selectedContact, setSelectedContact] = useState<CRMContact | null>(null);
 
   const [copied, setCopied] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
-  const [crmListTab, setCrmListTab] = useState<'deals' | 'activities' | 'notes'>('deals'); 
+  const [crmListTab, setCrmListTab] = useState<'deals' | 'activities' | 'notes' | 'contacts'>('contacts'); 
   const [activePlatformTab, setActivePlatformTab] = useState<string>('ALL'); 
   
   // Header Dropdown State
@@ -279,6 +287,11 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
   };
 
   const filteredStats = calculateFilteredStats();
+  const cpl = filteredStats.totalLeads > 0 ? filteredStats.totalSpend / filteredStats.totalLeads : 0;
+
+  const isPrepaid = currentClient.is_prepaid;
+  const balance = currentClient.current_balance || 0;
+  const isLowBalance = isPrepaid && balance < 30;
 
   const fetchData = async () => {
     if (!dateRange.start || !dateRange.end) return;
@@ -296,7 +309,8 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
         contractService.getClientContract(currentClient.id),
         dealService.getDeals(currentClient.id), 
         aiAnalysisService.getSavedInsights(currentClient.id),
-        commercialService.getActivities(currentClient.id)
+        commercialService.getActivities(currentClient.id),
+        crmService.getContacts(currentClient.id)
       ];
 
       const results = await Promise.all(promises);
@@ -323,6 +337,7 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
       setDeals(results[3]);
       setInsights(results[4]);
       setActivities(results[5] || []);
+      setContacts(results[6] || []);
       
     } catch (error: any) {
       console.error("Failed to load client details:", error);
@@ -389,6 +404,33 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
   const handleOpenNewActivity = () => {
       setActivityToEdit(null);
       setIsActivityModalOpen(true);
+  };
+
+  const handleContactSaved = async () => {
+      const contactsData = await crmService.getContacts(currentClient.id);
+      setContacts(contactsData);
+      setContactToEdit(null);
+  };
+
+  const handleEditContact = (contact: CRMContact) => {
+      setContactToEdit(contact);
+      setIsContactModalOpen(true);
+  };
+
+  const handleDeleteContact = async (id: string) => {
+      if (!confirm("Tem certeza que deseja excluir este contato?")) return;
+      try {
+          await crmService.deleteContact(id);
+          setContacts(prev => prev.filter(c => c.id !== id));
+          toast.success("Contato excluído.");
+      } catch (error) {
+          toast.error("Erro ao excluir contato.");
+      }
+  };
+
+  const handleOpenNewContact = () => {
+      setContactToEdit(null);
+      setIsContactModalOpen(true);
   };
 
   const handleGenerateInsights = async () => {
@@ -466,7 +508,7 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
     text += `💰 Resumo Financeiro\n`;
     text += `Investimento: R$ ${filteredStats.totalSpend?.toLocaleString('pt-BR')}\n`;
     text += `Receita (Ads + Manual): R$ ${filteredStats.totalRevenue?.toLocaleString('pt-BR')}\n`;
-    text += `ROAS Misto: ${filteredStats.roas.toFixed(2)}x\n`;
+    text += `Custo por Lead Médio: R$ ${cpl.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n`;
     text += `Taxa de Conversão: ${filteredStats.conversionRate.toFixed(2)}% (${filteredStats.totalSalesCount} vendas)`;
 
     if (currentClient.crm_enabled) {
@@ -501,7 +543,7 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
     { label: 'Leads', value: filteredStats.totalLeads.toLocaleString('pt-BR'), sub: `${daysDiff}d`, trend: 'up', icon: Users, color: 'text-orange-500' },
     { label: 'Investido', value: `R$ ${filteredStats.totalSpend.toLocaleString('pt-BR')}`, sub: `${daysDiff}d`, trend: 'up', icon: DollarSign, color: 'text-blue-500' },
     { label: 'Receita Total', value: `R$ ${filteredStats.totalRevenue.toLocaleString('pt-BR')}`, sub: `Ads: ${(filteredStats.adRevenue/1000).toFixed(1)}k | Man: ${(filteredStats.offlineRevenue/1000).toFixed(1)}k`, trend: 'up', icon: Target, color: 'text-green-500' },
-    { label: 'ROAS Misto', value: `${(filteredStats.roas || 0).toFixed(2)}x`, sub: 'Meta 4x', trend: (filteredStats.roas || 0) > 4 ? 'up' : 'down', icon: PieChart, color: 'text-purple-500' },
+    { label: 'Custo por Lead', value: `R$ ${cpl.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, sub: 'Média', trend: 'down', icon: TrendingUp, color: 'text-purple-500' },
     { label: 'ROI Real', value: `${((filteredStats.roi || 0) * 100).toFixed(1)}%`, sub: 'Final', trend: 'up', icon: BarChart, color: 'text-emerald-500' },
     { label: 'Taxa de Conversão', value: `${(filteredStats.conversionRate || 0).toFixed(2)}%`, sub: `${filteredStats.totalSalesCount} Vendas / ${filteredStats.totalLeads} Leads`, trend: 'up', icon: Percent, color: 'text-pink-500' },
   ];
@@ -993,6 +1035,101 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
                 </div>
             </>
         );
+    } else if (crmListTab === 'contacts') {
+        if (selectedContact) {
+            return (
+                <ContactDetails 
+                    contact={selectedContact} 
+                    onBack={() => setSelectedContact(null)} 
+                />
+            );
+        }
+
+        return (
+            <>
+                <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-base md:text-lg font-bold text-slate-800 flex items-center gap-2">
+                        <User size={18} className="text-emerald-600" />
+                        Contatos
+                    </h3>
+                    <div className="flex gap-2">
+                        <button onClick={handleOpenNewContact} className="flex items-center gap-1 text-xs font-bold bg-emerald-50 text-emerald-700 hover:bg-emerald-100 px-3 py-1.5 rounded-lg transition-colors">
+                            <Plus size={14} /> Novo
+                        </button>
+                    </div>
+                </div>
+                <div className="flex-1 overflow-y-auto pr-1 max-h-[400px] custom-scrollbar">
+                    {contacts.length > 0 ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                            {contacts.map(contact => (
+                                <div key={contact.id} className="p-3 bg-slate-50 rounded-lg border border-slate-100 relative group hover:bg-white hover:shadow-sm transition-all h-full">
+                                    <div className="flex justify-between items-start mb-1">
+                                        <p className="font-bold text-slate-700 text-sm truncate pr-6">{contact.name}</p>
+                                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase ${
+                                            contact.status === 'customer' ? 'bg-green-100 text-green-700' : 
+                                            contact.status === 'lost' ? 'bg-red-100 text-red-700' : 
+                                            'bg-blue-100 text-blue-700'
+                                        }`}>
+                                            {contact.status === 'customer' ? 'Cliente' : contact.status === 'lost' ? 'Perdido' : 'Lead'}
+                                        </span>
+                                    </div>
+                                    
+                                    <p className="text-xs text-slate-500 mb-1">{contact.role || 'Sem cargo'}</p>
+                                    
+                                    <div className="space-y-1 mt-2">
+                                        {contact.email && (
+                                            <div className="flex items-center gap-1.5 text-xs text-slate-600 truncate">
+                                                <Mail size={12} className="text-slate-400" />
+                                                <span className="truncate" title={contact.email}>{contact.email}</span>
+                                            </div>
+                                        )}
+                                        {contact.phone && (
+                                            <div className="flex items-center gap-1.5 text-xs text-slate-600">
+                                                <Phone size={12} className="text-slate-400" />
+                                                <span>{contact.phone}</span>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {contact.notes && (
+                                        <p className="text-[10px] text-slate-400 mt-2 italic line-clamp-2 border-t border-slate-100 pt-1">"{contact.notes}"</p>
+                                    )}
+
+                                    {/* Action Buttons */}
+                                    <div className="absolute right-2 top-8 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity bg-white p-0.5 rounded border border-slate-100 shadow-sm z-10">
+                                        <button 
+                                            onClick={(e) => { e.stopPropagation(); handleEditContact(contact); }}
+                                            className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors"
+                                            title="Editar"
+                                        >
+                                            <PenLine size={12} />
+                                        </button>
+                                        <button 
+                                            onClick={(e) => { e.stopPropagation(); handleDeleteContact(contact.id); }}
+                                            className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                                            title="Excluir"
+                                        >
+                                            <Trash2 size={12} />
+                                        </button>
+                                    </div>
+                                    
+                                    {/* Click Area for Details */}
+                                    <div 
+                                        className="absolute inset-0 cursor-pointer z-0" 
+                                        onClick={() => setSelectedContact(contact)}
+                                    />
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="h-full flex flex-col items-center justify-center text-slate-400 text-center italic text-xs border-2 border-dashed border-slate-100 rounded-lg p-6">
+                            <p>Nenhum contato registrado.</p>
+                            <p className="mt-1">Adicione os principais contatos deste cliente.</p>
+                        </div>
+                    )}
+                </div>
+            </>
+        );
     } else {
         return <ClientNotes clientId={currentClient.id} />;
     }
@@ -1019,6 +1156,14 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
         onSuccess={handleActivitySaved}
         clientId={currentClient.id}
         activityToEdit={activityToEdit}
+      />
+
+      <NewContactModal
+        isOpen={isContactModalOpen}
+        onClose={() => setIsContactModalOpen(false)}
+        onSuccess={handleContactSaved}
+        clientId={currentClient.id}
+        contactToEdit={contactToEdit}
       />
 
       <NewManualMetricModal
@@ -1094,6 +1239,16 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
                         </div>
                     </div>
                 )}
+            </div>
+            {/* Alerta de Saldo */}
+            <div className="flex items-center mt-2">
+               <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border ${isLowBalance ? 'bg-red-50 border-red-200' : 'bg-slate-50 border-slate-200'}`}>
+                  {isPrepaid ? <Wallet size={12} className={isLowBalance ? 'text-red-500' : 'text-slate-500'} /> : <CreditCard size={12} className="text-slate-500" />}
+                  <span className={`text-[10px] uppercase font-bold tracking-wider ${isLowBalance ? 'text-red-600' : 'text-slate-500'}`}>
+                     {isPrepaid ? 'Saldo:' : 'Fatura:'} R$ {balance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </span>
+                  {isLowBalance && <AlertTriangle size={12} className="text-red-500 animate-pulse ml-1" />}
+               </div>
             </div>
           </div>
           
@@ -1357,6 +1512,12 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
                                     className={`flex-1 sm:flex-none px-3 py-1.5 text-xs font-bold rounded-md transition-all ${crmListTab === 'activities' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                                 >
                                     Atividades
+                                </button>
+                                <button 
+                                    onClick={() => setCrmListTab('contacts')}
+                                    className={`flex-1 sm:flex-none px-3 py-1.5 text-xs font-bold rounded-md transition-all ${crmListTab === 'contacts' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                                >
+                                    CRM
                                 </button>
                             </>
                         )}

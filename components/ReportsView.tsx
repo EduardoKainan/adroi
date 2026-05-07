@@ -192,14 +192,14 @@ export const ReportsView: React.FC = () => {
                 <p className="text-sm text-slate-500">Análise consolidada de fechamentos e receita.</p>
             </div>
 
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto">
+            <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
                 {/* FILTRO DE CLIENTE */}
                 <div className="relative w-full sm:w-[200px]">
                     <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">
                         <Users size={16} />
                     </div>
                     <select
-                        className="min-h-[48px] w-full pl-9 pr-8 py-2 border border-slate-300 rounded-lg text-sm font-medium bg-slate-50 hover:bg-slate-100 transition-colors focus:ring-2 focus:ring-indigo-500 outline-none appearance-none cursor-pointer"
+                        className="w-full pl-9 pr-8 py-2 border border-slate-300 rounded-lg text-sm font-medium bg-slate-50 hover:bg-slate-100 transition-colors focus:ring-2 focus:ring-indigo-500 outline-none appearance-none cursor-pointer"
                         value={selectedClientId}
                         onChange={(e) => setSelectedClientId(e.target.value)}
                     >
@@ -216,7 +216,7 @@ export const ReportsView: React.FC = () => {
                 <div className="relative w-full sm:w-auto" id="date-picker-reports">
                     <button 
                         onClick={() => setShowDatePicker(!showDatePicker)}
-                        className="min-h-[48px] w-full sm:w-[220px] bg-slate-50 border border-slate-300 text-slate-700 py-2 px-3 rounded-lg text-sm font-medium flex items-center justify-between hover:bg-slate-100 transition-colors"
+                        className="w-full sm:w-[220px] bg-slate-50 border border-slate-300 text-slate-700 py-2 px-3 rounded-lg text-sm font-medium flex items-center justify-between hover:bg-slate-100 transition-colors"
                     >
                         <div className="flex items-center gap-2">
                             <Calendar size={16} className="text-slate-500" />
@@ -230,7 +230,7 @@ export const ReportsView: React.FC = () => {
                     </button>
 
                     {showDatePicker && (
-                        <div className="absolute top-full right-0 mt-2 w-[calc(100vw-2rem)] max-w-[300px] bg-white rounded-lg shadow-xl border border-slate-200 z-50 p-4 animate-in fade-in zoom-in-95">
+                        <div className="absolute top-full right-0 mt-2 w-[300px] bg-white rounded-lg shadow-xl border border-slate-200 z-50 p-4 animate-in fade-in zoom-in-95">
                             <div className="grid grid-cols-2 gap-2 mb-4">
                                 <button onClick={() => { setDateOption('THIS_MONTH'); setShowDatePicker(false); }} className="px-2 py-2 text-xs font-bold bg-indigo-50 text-indigo-700 rounded hover:bg-indigo-100">Este Mês</button>
                                 <button onClick={() => { setDateOption('30D'); setShowDatePicker(false); }} className="px-2 py-2 text-xs font-bold bg-slate-50 text-slate-700 rounded hover:bg-slate-100">Últimos 30d</button>
@@ -249,14 +249,14 @@ export const ReportsView: React.FC = () => {
                     )}
                 </div>
 
-                <button onClick={handleExportCSV} className="min-h-[48px] min-w-[48px] p-2 text-slate-500 hover:text-indigo-600 border border-slate-300 rounded-lg hover:bg-slate-50" title="Exportar CSV">
+                <button onClick={handleExportCSV} className="p-2 text-slate-500 hover:text-indigo-600 border border-slate-300 rounded-lg hover:bg-slate-50" title="Exportar CSV">
                     <Download size={20} />
                 </button>
             </div>
         </div>
 
         {/* KPIs */}
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-3 md:gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
                 <div>
                     <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Receita Total</p>

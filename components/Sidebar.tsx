@@ -43,7 +43,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView }) =
   return (
     <>
       {/* --- MOBILE HEADER (Visible only on mobile) --- */}
-      <header className="md:hidden fixed top-0 left-0 w-full h-16 bg-slate-900/95 text-white z-50 shadow-lg backdrop-blur-xl flex items-center justify-between px-4">
+      <header className="md:hidden fixed top-0 left-0 w-full h-16 bg-slate-900 text-white z-50 shadow-lg flex items-center justify-between px-4">
         <div className="flex items-center gap-3">
           <img src={logoUrl} alt="AdRoi Logo" className="w-8 h-8 object-contain" />
           <div>
@@ -51,7 +51,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView }) =
           </div>
         </div>
         <button 
-          className="min-h-[44px] min-w-[44px] rounded-xl p-2 text-slate-400 hover:bg-slate-800 hover:text-white transition-colors"
+          className="p-2 text-slate-400 hover:text-white transition-colors"
           onClick={() => setIsMobileMenuOpen(true)}
         >
           <Menu size={24} />
@@ -125,7 +125,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView }) =
           />
           
           {/* Drawer Menu */}
-          <div className="absolute top-0 right-0 w-[88vw] max-w-72 h-full bg-slate-900 text-white p-5 shadow-2xl flex flex-col animate-in slide-in-from-right duration-300 border-l border-slate-800">
+          <div className="absolute top-0 right-0 w-72 h-full bg-slate-900 text-white p-6 shadow-2xl flex flex-col animate-in slide-in-from-right duration-300 border-l border-slate-800">
             <div className="flex justify-between items-center mb-8">
               <div className="flex items-center gap-2">
                  <span className="text-xl font-bold">Menu</span>
@@ -144,7 +144,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView }) =
                   <button
                     key={item.id}
                     onClick={() => handleNavItemClick(item.id as ViewState)}
-                    className={`flex min-h-[48px] items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
+                    className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
                       isActive 
                         ? 'bg-indigo-600 text-white shadow-lg' 
                         : 'text-slate-400 hover:bg-slate-800'

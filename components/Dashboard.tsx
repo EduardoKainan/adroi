@@ -287,7 +287,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectClient }) => {
       />
 
       {/* Header Stats */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 md:gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 md:gap-6">
         <div className="bg-indigo-600 rounded-xl p-5 md:p-6 text-white shadow-lg shadow-indigo-200">
           <div className="flex justify-between items-start mb-1">
              <p className="text-indigo-100 text-xs md:text-sm font-medium">Receita Gerada</p>
@@ -323,7 +323,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectClient }) => {
       {/* Client Portfolio Section */}
       <div className="min-h-[400px]">
         <div className="mb-6 space-y-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center justify-between">
              <div className="flex items-center gap-3">
                 <h3 className="text-lg md:text-xl font-bold text-slate-800">Carteira de Clientes</h3>
                 {loading && <Loader2 className="animate-spin text-indigo-600" size={18} />}
@@ -333,7 +333,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectClient }) => {
              </button>
           </div>
           
-          <div className="flex flex-col lg:flex-row items-stretch gap-3 w-full bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
+          <div className="flex flex-col lg:flex-row items-center gap-3 w-full bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
             <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto flex-1 z-10">
                 {/* Seletor de Data Customizado */}
                 <div className="relative w-full sm:w-auto" id="date-picker-container">
@@ -342,7 +342,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectClient }) => {
                       e.stopPropagation();
                       setShowDatePicker(!showDatePicker);
                     }}
-                    className="min-h-[48px] w-full sm:w-[220px] bg-slate-50 border border-slate-300 text-slate-700 py-2.5 px-3 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 flex items-center justify-between font-medium hover:bg-slate-100 transition-colors"
+                    className="w-full sm:w-[220px] bg-slate-50 border border-slate-300 text-slate-700 py-2.5 px-3 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 flex items-center justify-between font-medium hover:bg-slate-100 transition-colors"
                    >
                      <div className="flex items-center gap-2 overflow-hidden">
                        <Calendar size={16} className="text-slate-500 shrink-0" />
@@ -358,7 +358,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectClient }) => {
                    
                    {/* Dropdown de Datas e Calendário */}
                    {showDatePicker && (
-                     <div className="absolute top-full left-0 mt-2 w-[calc(100vw-2rem)] max-w-[320px] bg-white rounded-lg shadow-xl border border-slate-200 z-50 p-4 animate-in fade-in zoom-in-95 duration-200">
+                     <div className="absolute top-full left-0 mt-2 w-[320px] bg-white rounded-lg shadow-xl border border-slate-200 z-50 p-4 animate-in fade-in zoom-in-95 duration-200">
                        
                        {/* Seção 1: Inputs de Data (Calendário) */}
                        <div className="grid grid-cols-2 gap-3 mb-4">
@@ -434,7 +434,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectClient }) => {
                   <input 
                     type="text" 
                     placeholder="Filtrar por empresa..." 
-                    className="min-h-[48px] w-full pl-10 pr-4 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="w-full pl-10 pr-4 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     value={filter}
                     onChange={(e) => setFilter(e.target.value)}
                   />
@@ -443,7 +443,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectClient }) => {
             
             <button 
               onClick={handleOpenNewClientModal}
-              className="min-h-[48px] w-full lg:w-auto flex items-center justify-center gap-2 bg-indigo-600 text-white px-5 py-2.5 rounded-lg text-sm font-bold hover:bg-indigo-700 shadow-sm transition-all whitespace-nowrap"
+              className="w-full lg:w-auto flex items-center justify-center gap-2 bg-indigo-600 text-white px-5 py-2.5 rounded-lg text-sm font-bold hover:bg-indigo-700 shadow-sm transition-all whitespace-nowrap"
             >
                <Plus size={18} />
                <span>Novo Cliente</span>
@@ -453,7 +453,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectClient }) => {
 
         {/* CLIENTS GRID VIEW (4 COLUMNS on XL) */}
         {!loading && filteredClients.length > 0 ? (
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 md:gap-6 animate-fade-in">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 animate-fade-in">
              {filteredClients.map((client) => {
                 const roas = client.total_spend > 0 ? client.total_revenue / client.total_spend : 0;
                 const cpl = client.total_leads > 0 ? client.total_spend / client.total_leads : 0;
@@ -591,8 +591,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectClient }) => {
                      </div>
 
                      {/* Footer Actions */}
-                     <div className="px-4 py-3 border-t border-slate-100 bg-slate-50/50 flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center group-hover:bg-slate-50 transition-colors">
-                        <div className="flex flex-wrap gap-2">
+                     <div className="px-5 py-3 border-t border-slate-100 bg-slate-50/50 flex justify-between items-center group-hover:bg-slate-50 transition-colors">
+                        <div className="flex gap-2">
                             <button 
                                 onClick={(e) => handleCopyReport(e, client)}
                                 disabled={isCopying}

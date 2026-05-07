@@ -1,3 +1,1 @@
--- Entry point de schema para mÃ³dulo de estudos
--- 1) rode supabase/study_content_setup.sql para matÃ©rias, tÃ³picos e questÃµes
--- 2) rode supabase/study_progress_setup.sql para tentativas e resumo de progresso
+ûív›•å 11µéìŠ‰Ü­æ­yìmz{"¢

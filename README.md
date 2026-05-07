@@ -1,22 +1,20 @@
-# AdRoi Concurso MVP
+<div align="center">
+<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+</div>
 
-## Rodar localmente
+# Run and deploy your AI Studio app
 
-- `npm install`
-- copie `.env.example` para `.env.local`
-- `npm run dev`
+This contains everything you need to run your app locally.
 
-## Variáveis
+View your app in AI Studio: https://ai.studio/apps/fdfed987-d610-4946-9d85-c81fe555e4f7
 
-- `VITE_SUPABASE_URL`
-- `VITE_SUPABASE_ANON_KEY`
+## Run Locally
 
-## Persistência
+**Prerequisites:**  Node.js
 
-- O app tenta ler o banco de questões do Supabase nas tabelas `study_subjects`, `study_topics` e `study_questions`
-- O progresso continua sendo salvo em `study_attempts` e `study_progress_summaries`
-- Se as tabelas não existirem ou o acesso falhar, cai automaticamente para `localStorage` + seed local
-- Scripts SQL:
-  - `supabase/study_content_setup.sql` → matérias, tópicos e 50 questões
-  - `supabase/study_progress_setup.sql` → tentativas e resumo de progresso
-- Para regenerar o seed SQL a partir de `data/studySeed.ts`: `node scripts/generateStudyContentSql.mjs`
+
+1. Install dependencies:
+   `npm install`
+2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
+3. Run the app:
+   `npm run dev`

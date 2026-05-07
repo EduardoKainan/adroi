@@ -420,7 +420,7 @@ export const ProfessionalDashboard: React.FC<ProfessionalDashboardProps> = ({ pr
       />
 
       {/* --- Linha Superior: KPIs --- */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4 shrink-0">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 shrink-0">
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
            <div>
              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Eficiência</span>
@@ -467,28 +467,28 @@ export const ProfessionalDashboard: React.FC<ProfessionalDashboardProps> = ({ pr
         
         {/* COLUNA ESQUERDA: Kanban ou Gráficos (8 cols) */}
         <div className="lg:col-span-8 xl:col-span-9 flex flex-col md:min-h-0">
-          <div className="flex flex-col items-start justify-between mb-4 shrink-0 gap-3 lg:flex-row lg:items-center">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 shrink-0 gap-2">
             <h3 className="font-bold text-slate-800 flex items-center gap-2">
               <AlertCircle size={18} className="text-indigo-600" />
               Gestão de Tarefas
             </h3>
             
-            <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+            <div className="flex items-center gap-2 w-full sm:w-auto">
                
                {/* Date Filter (Only in Analytics) */}
                {viewMode === 'analytics' && (
-                 <div className="flex w-full flex-wrap items-center gap-1 bg-white border border-slate-200 rounded-lg p-1 sm:w-auto sm:flex-nowrap sm:mr-2">
+                 <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-lg p-1 mr-2">
                     <Calendar size={14} className="text-slate-400 ml-1" />
                     <input 
                       type="date" 
-                      className="min-h-[40px] text-xs border-none outline-none text-slate-600 bg-transparent w-full sm:w-[90px]"
+                      className="text-xs border-none outline-none text-slate-600 bg-transparent w-[90px]"
                       value={dateRange.start}
                       onChange={(e) => setDateRange({...dateRange, start: e.target.value})}
                     />
                     <span className="text-slate-300">-</span>
                     <input 
                       type="date" 
-                      className="min-h-[40px] text-xs border-none outline-none text-slate-600 bg-transparent w-full sm:w-[90px]"
+                      className="text-xs border-none outline-none text-slate-600 bg-transparent w-[90px]"
                       value={dateRange.end}
                       onChange={(e) => setDateRange({...dateRange, end: e.target.value})}
                     />
@@ -524,7 +524,7 @@ export const ProfessionalDashboard: React.FC<ProfessionalDashboardProps> = ({ pr
 
                <button 
                 onClick={() => openNewTaskModal('do_now')}
-                className="min-h-[44px] text-xs font-medium px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-lg hover:bg-indigo-100 transition-colors flex items-center gap-1 whitespace-nowrap ml-auto sm:ml-0"
+                className="text-xs font-medium px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-lg hover:bg-indigo-100 transition-colors flex items-center gap-1 whitespace-nowrap ml-auto sm:ml-0"
                >
                  <Plus size={14} /> Nova Tarefa
                </button>
@@ -544,7 +544,7 @@ export const ProfessionalDashboard: React.FC<ProfessionalDashboardProps> = ({ pr
                     <div 
                         key={col.id} 
                         className={`flex flex-col rounded-xl border transition-all duration-200 
-                        flex-shrink-0 w-[88vw] sm:w-[320px] md:w-auto snap-center
+                        flex-shrink-0 w-[85vw] sm:w-[320px] md:w-auto snap-center
                         h-[400px] md:h-full
                         ${col.bgClass} 
                         ${isOver ? 'ring-2 ring-indigo-400 ring-offset-2 scale-[1.01]' : col.borderClass}
@@ -850,7 +850,7 @@ export const ProfessionalDashboard: React.FC<ProfessionalDashboardProps> = ({ pr
           />
 
           {/* Drawer */}
-          <div className="fixed top-0 right-0 h-full w-full max-w-[400px] bg-white shadow-2xl z-50 p-0 flex flex-col border-l border-slate-200 animate-in slide-in-from-right duration-300">
+          <div className="fixed top-0 right-0 h-full w-[400px] bg-white shadow-2xl z-50 p-0 flex flex-col border-l border-slate-200 animate-in slide-in-from-right duration-300">
             {/* Header do Drawer */}
             <div className="p-6 border-b border-slate-100 bg-slate-50/50">
                <div className="flex justify-between items-start mb-4">
