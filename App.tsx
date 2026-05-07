@@ -6,6 +6,7 @@ import { ClientView } from './components/ClientView';
 import { ProfessionalDashboard } from './components/ProfessionalDashboard';
 import { SettingsView } from './components/SettingsView';
 import { PublicReportForm } from './components/PublicReportForm';
+import { PublicCRMView } from './components/PublicCRMView';
 import { HelpView } from './components/HelpView';
 import { SuperAdminDashboard } from './components/SuperAdminDashboard'; // Import
 import { ReportsView } from './components/ReportsView'; // Import
@@ -26,6 +27,15 @@ const AppContent: React.FC = () => {
     const path = window.location.pathname;
     if (path.startsWith('/report/')) {
         const id = path.split('/report/')[1];
+        if (id) return id;
+    }
+    return null;
+  });
+
+  const [publicCrmId] = useState<string | null>(() => {
+    const path = window.location.pathname;
+    if (path.startsWith('/crm/')) {
+        const id = path.split('/crm/')[1];
         if (id) return id;
     }
     return null;
@@ -107,9 +117,13 @@ const AppContent: React.FC = () => {
     );
   }
 
-  // 2. Rota Pública (Relatório)
+  // 2. Rota Pública (Relatório ou CRM)
   if (publicClientId) {
     return <PublicReportForm clientId={publicClientId} />;
+  }
+
+  if (publicCrmId) {
+    return <PublicCRMView clientId={publicCrmId} />;
   }
 
   // 3. Auth Flow

@@ -158,28 +158,30 @@ export const clientService = {
 
       // --- WEBHOOK TRIGGER (INTEGRAÇÃO N8N) ---
       const webhookUrl = 'https://n8nback.zapgestao.app.br/webhook/cadastroNovoCliente';
-      console.log('🚀 Iniciando disparo do webhook (Modo No-CORS) para:', webhookUrl);
+      console.log('🚀 Iniciando disparo do webhook para:', webhookUrl);
 
-      fetch(webhookUrl, {
-        method: 'POST',
-        mode: 'no-cors', 
-        headers: { 
-            'Content-Type': 'text/plain' 
-        },
-        keepalive: true,
-        body: JSON.stringify({
-          event: 'new_client_created',
-          client: data,
-          timestamp: new Date().toISOString(),
-          source: 'adroi_saas_frontend'
-        })
-      })
-      .then(() => {
-        console.log('✅ Webhook disparado (Resposta opaca devido a no-cors)');
-      })
-      .catch(err => {
-        console.error('❌ ERRO DE REDE AO DISPARAR WEBHOOK:', err);
-      });
+      try {
+        fetch(webhookUrl, {
+          method: 'POST',
+          mode: 'no-cors', 
+          headers: { 
+              'Content-Type': 'text/plain' 
+          },
+          keepalive: true,
+          body: JSON.stringify({
+            event: 'new_client_created',
+            client: data,
+            timestamp: new Date().toISOString(),
+            source: 'adroi_saas_frontend'
+          })
+        }).then(() => {
+          console.log('✅ Webhook disparado (Resposta opaca devido a no-cors)');
+        }).catch(err => {
+          console.warn('⚠️ Aviso: Webhook falhou (Provavelmente bloqueado ou Inativo), ignorando.', err.message);
+        });
+      } catch (err) {
+        console.warn('⚠️ Aviso: Erro ao disparar webhook:', err);
+      }
       // ----------------------------------------------
 
       return {

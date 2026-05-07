@@ -28,6 +28,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     let mounted = true;
 
+    // Fallback: force loading to false after 6 seconds to prevent infinite white screen
+    const fallbackTimeout = setTimeout(() => {
+      if (mounted) {
+        console.warn("Auth initialization timed out. Forcing UI to load.");
+        setLoading(false);
+      }
+    }, 6000);
+
     // 1. Check active session immediately
     const initSession = async () => {
       try {
@@ -36,6 +44,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (error) {
           console.warn("Erro na sessão inicial:", error.message);
           if (mounted) setLoading(false);
+          clearTimeout(fallbackTimeout);
           return;
         }
 
@@ -48,10 +57,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             await fetchProfile(session.user.id);
           } else {
             setLoading(false);
+            clearTimeout(fallbackTimeout);
           }
         }
       } catch (err) {
-        if (mounted) setLoading(false);
+        if (mounted) {
+           setLoading(false);
+           clearTimeout(fallbackTimeout);
+        }
       }
     };
 
@@ -85,11 +98,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setProfile(null);
         setOrganization(null);
         setLoading(false);
+        clearTimeout(fallbackTimeout);
       }
     });
 
     return () => {
       mounted = false;
+      clearTimeout(fallbackTimeout);
       subscription.unsubscribe();
     };
   }, []);

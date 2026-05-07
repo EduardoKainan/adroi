@@ -148,6 +148,7 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
 
   const [copied, setCopied] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [crmLinkCopied, setCrmLinkCopied] = useState(false);
   const [crmListTab, setCrmListTab] = useState<'deals' | 'activities' | 'notes' | 'contacts'>('contacts'); 
   const [activePlatformTab, setActivePlatformTab] = useState<string>('ALL'); 
   
@@ -533,6 +534,13 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
     navigator.clipboard.writeText(url);
     setLinkCopied(true);
     setTimeout(() => setLinkCopied(false), 2000);
+  };
+
+  const handleCopyCrmLink = () => {
+    const url = `${window.location.origin}/crm/${currentClient.id}`;
+    navigator.clipboard.writeText(url);
+    setCrmLinkCopied(true);
+    setTimeout(() => setCrmLinkCopied(false), 2000);
   };
 
   const daysDiff = dateRange.start && dateRange.end 
@@ -1532,11 +1540,18 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
 
                 <div className="flex gap-2">
                   <button 
+                    onClick={handleCopyCrmLink} 
+                    className={`flex items-center gap-1 text-xs font-bold px-3 py-1.5 rounded-lg transition-colors border ${crmLinkCopied ? 'bg-green-50 text-green-700 border-green-200' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'}`}
+                    title="Copiar link do CRM do cliente"
+                  >
+                    {crmLinkCopied ? <Check size={14} /> : <Link size={14} />} CRM
+                  </button>
+                  <button 
                     onClick={handleCopyPublicLink} 
                     className={`flex items-center gap-1 text-xs font-bold px-3 py-1.5 rounded-lg transition-colors border ${linkCopied ? 'bg-green-50 text-green-700 border-green-200' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'}`}
                     title="Copiar link para cliente preencher"
                   >
-                    {linkCopied ? <Check size={14} /> : <Link size={14} />}
+                    {linkCopied ? <Check size={14} /> : <Link size={14} />} Relatório
                   </button>
                 </div>
              </div>
