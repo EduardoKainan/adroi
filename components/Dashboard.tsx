@@ -36,6 +36,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectClient }) => {
   const [linkCopiedId, setLinkCopiedId] = useState<string | null>(null);
   const [copyingId, setCopyingId] = useState<string | null>(null);
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
+  const [portfolioTab, setPortfolioTab] = useState<'ativos' | 'desativados'>('ativos');
 
   // Calcula as datas iniciais baseadas na opção selecionada
   useEffect(() => {
@@ -265,10 +266,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectClient }) => {
     }, 100);
   };
 
-  const filteredClients = clients.filter(c => 
-    (c.name?.toLowerCase() || '').includes(filter.toLowerCase()) || 
-    (c.company?.toLowerCase() || '').includes(filter.toLowerCase())
-  );
+  const filteredClients = clients.filter(c => {
+    const isAtivo = c.status === 'active' || !c.status;
+    const matchTab = portfolioTab === 'ativos' ? isAtivo : !isAtivo;
+    const matchFilter = (c.name?.toLowerCase() || '').includes(filter.toLowerCase()) || 
+                        (c.company?.toLowerCase() || '').includes(filter.toLowerCase());
+    return matchTab && matchFilter;
+  });
 
   const totalRevenue = clients.reduce((acc, curr) => acc + (curr.total_revenue || 0), 0);
   const activeClients = clients.filter(c => c.status === 'active').length;
@@ -345,6 +349,21 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectClient }) => {
              </div>
              <button onClick={fetchData} className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded-lg transition-colors" title="Atualizar">
                 <RefreshCw size={18} />
+             </button>
+          </div>
+          
+          <div className="bg-slate-100 p-1 divide-x-0 rounded-lg inline-flex mb-4 relative z-0">
+             <button
+               className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${portfolioTab === 'ativos' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
+               onClick={() => setPortfolioTab('ativos')}
+             >
+                Ativos ({clients.filter(c => c.status === 'active' || !c.status).length})
+             </button>
+             <button
+               className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${portfolioTab === 'desativados' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
+               onClick={() => setPortfolioTab('desativados')}
+             >
+                Desativados ({clients.filter(c => c.status && c.status !== 'active').length})
              </button>
           </div>
           
