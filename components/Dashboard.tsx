@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { clientService, getLocalDateString } from '../services/clientService';
 import { contractService } from '../services/contractService';
+import { copyTextToClipboard } from '../lib/clipboard';
 import { Client, Contract } from '../types';
 import { Search, Plus, MoreVertical, TrendingUp, AlertTriangle, Loader2, RefreshCw, Copy, Check, Calendar, ChevronRight, Trash2, PauseCircle, PlayCircle, PenLine, ChevronDown, DollarSign, Users, PieChart, Link, Wallet, CreditCard } from 'lucide-react';
 import { NewClientModal } from './NewClientModal';
@@ -86,8 +87,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectClient }) => {
 
     try {
       const [clientsData, contractsData] = await Promise.all([
-        clientService.getClients(dateRange.start, dateRange.end),
-        contractService.getActiveContracts()
+        clientService.getClients(dateRange.start, dateRange.end).catch(e => { console.error('Error fetching clients', e); return []; }),
+        contractService.getActiveContracts().catch(e => { console.error('Error fetching contracts', e); return {}; })
       ]);
       
       if (!mounted) return;
@@ -202,7 +203,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectClient }) => {
 
       text += `Valor total investido: R$ ${client.total_spend?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
 
-      await navigator.clipboard.writeText(text);
+      await copyTextToClipboard(text);
       setCopiedId(client.id);
       setTimeout(() => setCopiedId(null), 2000);
       toast.success('Relatório copiado para a área de transferência!');
@@ -214,10 +215,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectClient }) => {
     }
   };
 
-  const handleCopyLink = (e: React.MouseEvent, client: Client) => {
+  const handleCopyLink = async (e: React.MouseEvent, client: Client) => {
     e.stopPropagation();
     const url = `${window.location.origin}/report/${client.id}`;
-    navigator.clipboard.writeText(url);
+    await copyTextToClipboard(url);
     setLinkCopiedId(client.id);
     toast.success('Link de feedback copiado!');
     setTimeout(() => setLinkCopiedId(null), 2000);

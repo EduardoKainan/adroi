@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import { Client, Contract, Campaign, DailyMetric, Deal, Insight, CommercialActivity, CRMContact, CRMInteraction } from '../types';
 import { clientService, getLocalDateString, PlatformMetric } from '../services/clientService';
 import { contractService } from '../services/contractService';
+import { copyTextToClipboard } from '../lib/clipboard';
 import { dealService } from '../services/dealService';
 import { commercialService } from '../services/commercialService';
 import { crmService } from '../services/crmService';
@@ -295,23 +296,34 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
   const isLowBalance = isPrepaid && balance < 30;
 
   const fetchData = async () => {
-    if (!dateRange.start || !dateRange.end) return;
+    if (!dateRange.start || !dateRange.end) {
+        setLoading(false);
+        return;
+    }
     
     setLoading(true);
     setChartsReady(false);
+    let mounted = true;
+
+    const timeoutId = setTimeout(() => {
+        if (mounted) {
+            setLoading(false);
+            setChartsReady(true);
+        }
+    }, 5000);
 
     try {
       const startDateStr = dateRange.start;
       const endDateStr = dateRange.end;
 
       const promises: Promise<any>[] = [
-        clientService.getCampaigns(currentClient.id, startDateStr, endDateStr),
-        clientService.getClientPlatformMetrics(currentClient.id, startDateStr, endDateStr),
-        contractService.getClientContract(currentClient.id),
-        dealService.getDeals(currentClient.id), 
-        aiAnalysisService.getSavedInsights(currentClient.id),
-        commercialService.getActivities(currentClient.id),
-        crmService.getContacts(currentClient.id)
+        clientService.getCampaigns(currentClient.id, startDateStr, endDateStr).catch(e => { console.error('Error fetching campaigns', e); return [] }),
+        clientService.getClientPlatformMetrics(currentClient.id, startDateStr, endDateStr).catch(e => { console.error('Error fetching metrics', e); return [] }),
+        contractService.getClientContract(currentClient.id).catch(e => { console.error('Error fetching contract', e); return null }),
+        dealService.getDeals(currentClient.id).catch(e => { console.error('Error fetching deals', e); return [] }), 
+        aiAnalysisService.getSavedInsights(currentClient.id).catch(e => { console.error('Error fetching insights', e); return [] }),
+        commercialService.getActivities(currentClient.id).catch(e => { console.error('Error fetching activities', e); return [] }),
+        crmService.getContacts(currentClient.id).catch(e => { console.error('Error fetching contacts', e); return [] })
       ];
 
       const results = await Promise.all(promises);
@@ -344,8 +356,11 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
       console.error("Failed to load client details:", error);
       toast.error("Falha ao carregar detalhes do cliente.");
     } finally {
-      setLoading(false);
-      setTimeout(() => setChartsReady(true), 150);
+      clearTimeout(timeoutId);
+      if (mounted) {
+        setLoading(false);
+        setTimeout(() => setChartsReady(true), 150);
+      }
     }
   };
 
@@ -484,7 +499,7 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
     fetchData();
   }, [currentClient.id, dateRange]);
 
-  const handleCopyReport = () => {
+  const handleCopyReport = async () => {
     const startDateParts = dateRange.start.split('-');
     const endDateParts = dateRange.end.split('-');
     const periodStr = `${startDateParts[2]}/${startDateParts[1]} - ${endDateParts[2]}/${endDateParts[1]}`;
@@ -524,21 +539,21 @@ export const ClientView: React.FC<ClientViewProps> = ({ client, clients = [], on
         text += `- Propostas Enviadas: ${proposals} (R$ ${proposalValue.toLocaleString('pt-BR')})\n`;
     }
 
-    navigator.clipboard.writeText(text);
+    await copyTextToClipboard(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleCopyPublicLink = () => {
+  const handleCopyPublicLink = async () => {
     const url = `${window.location.origin}/report/${currentClient.id}`;
-    navigator.clipboard.writeText(url);
+    await copyTextToClipboard(url);
     setLinkCopied(true);
     setTimeout(() => setLinkCopied(false), 2000);
   };
 
-  const handleCopyCrmLink = () => {
+  const handleCopyCrmLink = async () => {
     const url = `${window.location.origin}/crm/${currentClient.id}`;
-    navigator.clipboard.writeText(url);
+    await copyTextToClipboard(url);
     setCrmLinkCopied(true);
     setTimeout(() => setCrmLinkCopied(false), 2000);
   };
