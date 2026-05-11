@@ -71,15 +71,26 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectClient }) => {
   }, [dateOption]);
 
   const fetchData = async () => {
-    if (!dateRange.start || !dateRange.end) return;
+    if (!dateRange.start || !dateRange.end) {
+      setLoading(false); // If no date, don't stay loading forever
+      return;
+    }
 
     setLoading(true);
+    let mounted = true;
+    
+    const timeoutId = setTimeout(() => {
+      if (mounted) setLoading(false);
+    }, 5000);
+
     try {
       const [clientsData, contractsData] = await Promise.all([
         clientService.getClients(dateRange.start, dateRange.end),
         contractService.getActiveContracts()
       ]);
       
+      if (!mounted) return;
+
       setClients(clientsData);
 
       // Lógica de Onboarding: Se carregou e não tem clientes, e o usuário não fechou manualmente antes
@@ -98,15 +109,19 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectClient }) => {
       setContracts(contractsMap);
 
     } catch (error) {
-      console.error("Failed to load dashboard data");
+      console.error("Failed to load dashboard data", error);
       toast.error("Falha ao carregar dados do painel.");
     } finally {
-      setLoading(false);
+      clearTimeout(timeoutId);
+      if (mounted) setLoading(false);
     }
   };
 
   useEffect(() => {
     fetchData();
+    return () => {
+      // In case unmount happens while loading
+    };
   }, [dateRange]); // Recarrega sempre que o range de datas mudar
 
   // Fecha o menu ao clicar fora

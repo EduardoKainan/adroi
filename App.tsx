@@ -108,14 +108,7 @@ const AppContent: React.FC = () => {
 
   // --- RENDER ---
   
-  // 1. Loading Inicial
-  if (authLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <Loader2 className="animate-spin text-indigo-600" size={40} />
-      </div>
-    );
-  }
+  // 1. Loading Inicial (Removido para evitar loop infinito em alguns provedores)
 
   // 2. Rota Pública (Relatório ou CRM)
   if (publicClientId) {
